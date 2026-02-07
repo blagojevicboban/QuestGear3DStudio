@@ -1,98 +1,104 @@
-# 🥽 QuestStream 3D Processor
+<p align="center">
+  <img src="assets/banner.png" width="800" alt="QuestStream 3D Banner">
+</p>
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![UI: Flet](https://img.shields.io/badge/UI-Flet/Flutter-02569B.svg)](https://flet.dev/)
-[![Engine: Open3D](https://img.shields.io/badge/Engine-Open3D-green.svg)](http://www.open3d.org/)
+# <p align="center">🥽 QuestStream 3D Processor</p>
 
-**QuestStream** je premium alat za rekonstrukciju 3D scena visokog kvaliteta direktno iz podataka snimljenih putem **Meta Quest 3** headset-a. Koristeći naprednu volumetrijsku integraciju (TSDF), QuestStream pretvara sirove YUV slike i depth mape u detaljne, teksturirane 3D modele.
+<p align="center">
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://flet.dev/"><img src="https://img.shields.io/badge/UI-Flet/Flutter-02569B.svg" alt="UI: Flet"></a>
+  <a href="http://www.open3d.org/"><img src="https://img.shields.io/badge/Engine-Open3D-green.svg" alt="Engine: Open3D"></a>
+</p>
 
----
-
-## ✨ Glavne Funkcionalnosti
-
-- 🚀 **Asinhroni Pipeline**: Brza obrada podataka bez zamrzavanja interfejsa.
-- 🎨 **Modern Deep UI**: Elegantan interfejs izgrađen pomoću **Flet** platforme sa dinamičkim progres barovima.
-- 🛠️ **Napredna Obrada**:
-  - **YUV_420_888 Conversion**: Automatska konverzija Quest sirovih formata u RGB.
-  - **Depth Optimization**: Filtriranje šuma, Infinity/NaN vrednosti i precizno skaliranje dubine.
-- 🌐 **Scalable TSDF**: Rekonstrukcija velikih scena uz minimalnu potrošnju memorije.
-- 🔍 **Real-time Logging**: Detaljan uvid u svaki korak procesa direktno u aplikaciji.
-- 🖼️ **Interactive Visualizer**: Eksterna inspekcija modela sa podrškom za rotaciju, zoom i promenu shading-a.
+**QuestStream** is a premium tool for high-quality 3D scene reconstruction directly from data captured via **Meta Quest 3** headsets. Using advanced volumetric integration (TSDF), QuestStream converts raw YUV images and depth maps into detailed, textured 3D models.
 
 ---
 
-## 🛠️ Tehnološki Stack
+## ✨ Key Features
 
-| Komponenta | Tehnologija |
+- 🚀 **Asynchronous Pipeline**: Fast data processing without freezing the interface.
+- 🎨 **Modern Deep UI**: Elegant interface built using the **Flet** platform with dynamic progress bars.
+- 🛠️ **Advanced Processing**:
+  - **YUV_420_888 Conversion**: Automatic conversion of Quest raw formats to RGB.
+  - **Depth Optimization**: Filtering noise, Infinity/NaN values, and precise depth scaling.
+- 🌐 **Scalable TSDF**: Reconstruction of large scenes with minimal memory consumption.
+- 🔍 **Real-time Logging**: Detailed insight into every step of the process directly in the app.
+- 🖼️ **Interactive Visualizer**: External model inspection with support for rotation, zoom, and shading changes.
+
+---
+
+## 🛠️ Technology Stack
+
+| Component | Technology |
 | :--- | :--- |
-| **Jezik** | Python 3.11 |
-| **Frontend** | Flet (Flutter based) |
+| **Language** | Python 3.11 |
+| **Frontend** | Flet (Flutter-based) |
 | **3D Engine** | Open3D |
 | **Computer Vision** | OpenCV & NumPy |
 | **Data Format** | JSON / CSV / YAML |
 
 ---
 
-## 🚀 Brzi Početak
+## 🚀 Quick Start
 
-### 📝 Preduslovi
+### 📝 Prerequisites
 - **OS**: Windows 10/11
-- **Python**: 3.11 (Preporučeno)
-- **Podaci**: Quest Capture podaci (ZIP ili raspakovan folder)
+- **Python**: 3.11 (Recommended)
+- **Data**: Quest Capture data (ZIP or extracted folder)
 
-### 💻 Instalacija
+### 💻 Installation
 ```powershell
-# Klonirajte projekt
+# Clone the project
 git clone https://github.com/blagojevicboban/QuestStream.git
 cd QuestStream
 
-# Postavljanje okruženja
+# Environment setup
 python -m venv venv
 .\venv\Scripts\activate
 
-# Instalacija zavisnosti
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 🎮 Pokretanje
+### 🎮 Running
 ```powershell
 python main.py
 ```
 
 ---
 
-## 📂 Struktura Projekta
+## 📂 Project Structure
 
 ```text
 QuestStream/
-├── main.py            # Ulazna tačka aplikacije
-├── config.yml         # Globalna podešavanja rekonstrukcije
+├── main.py            # Application entry point
+├── config.yml         # Global reconstruction settings
 ├── modules/
-│   ├── gui.py         # Flet UI i thread management
+│   ├── gui.py         # Flet UI and thread management
 │   ├── reconstruction.py# TSDF Engine (Open3D)
-│   ├── quest_adapter.py # Adaptacija Quest podataka
-│   ├── quest_image_processor.py # YUV/Depth obrada
+│   ├── quest_adapter.py # Quest data adaptation
+│   ├── quest_image_processor.py # YUV/Depth processing
 │   └── config_manager.py# YAML Config loader
-└── README_QUEST.md    # Detaljna uputstva za Quest 3 pipeline
+└── README_QUEST.md    # Detailed instructions for Quest 3 pipeline
 ```
 
 ---
 
-## 🎓 Napredna Upotreba
+## 🎓 Advanced Usage
 
-Za najbolje rezultate pri snimanju sa Meta Quest 3, preporučujemo:
-1. **Frame Interval**: Koristite `1` u Settings za maksimalne detalje.
-2. **Voxel Size**: Postavite na `0.01` ili `0.02` u zavisnosti od procesorske snage.
-3. **Pomeranje**: Krećite se polako i kružite oko objekata radi boljeg preklapanja podataka.
+For best results when recording with Meta Quest 3, we recommend:
+1. **Frame Interval**: Use `1` in Settings for maximum detail.
+2. **Voxel Size**: Set to `0.01` or `0.02` depending on processing power.
+3. **Movement**: Move slowly and circle around objects for better data overlap.
 
-Detaljniji vodič možete pronaći u [README_QUEST.md](./README_QUEST.md).
+A more detailed guide can be found in [README_QUEST.md](./README_QUEST.md).
 
 ---
 
-## 📄 Licenca
+## 📄 License
 
-Ovaj projekat je licenciran pod **MIT Licencom** - pogledajte [LICENSE](LICENSE) za detalje.
+This project is licensed under the **MIT License** - see [LICENSE](LICENSE) for details.
 
 ---
 *Developed with ❤️ for the Meta Quest Community*

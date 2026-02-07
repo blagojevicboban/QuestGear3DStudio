@@ -1,58 +1,58 @@
-# QuestStream 3D Processor - Dokumentacija
+# QuestStream 3D Processor - Documentation
 
-Ovaj alat omogućava 3D rekonstrukciju scena snimljenih pomoću **Meta Quest 3** uređaja (koristeći OpenQuestCapture ili slične alate). Pipeline pretvara sirove slike i depth mape u teksturirani 3D model.
+This tool enables 3D reconstruction of scenes captured using **Meta Quest 3** devices (using OpenQuestCapture or similar tools). The pipeline converts raw images and depth maps into a textured 3D model.
 
-## 🚀 Brzi početak
+## 🚀 Quick Start
 
-1. **Učitavanje podataka**:
-   - Kliknite na **"Load Folder"** i izaberite raspakovani folder sa Quest podacima.
-   - Program će automatski detektovati Quest format i kreirati `frames.json` (ako već ne postoji).
-2. **Podešavanja (Settings)**:
-   - Kliknite na ikonicu zupčanika (gore desno).
-   - **Voxel Size**: Postavite na `0.02` za dobar balans, ili `0.01` za visok kvalitet.
-   - **Frame Interval**: Postavite na `1` da procesujete svaki frejm, ili `5` za brzi pregled.
-3. **Rekonstrukcija**:
-   - Kliknite na **"Start Reconstruction"**.
-   - Pratite progres u logovima. Kada se završi, videćete broj generisanih temena (vertices).
-4. **Vizuelizacija**:
-   - Kliknite na **"Visualizer (External)"** da otvorite 3D pregled.
-
----
-
-## 🛠️ Tehnički Pipeline
-
-### 1. Preprocesiranje Slikovnih Podataka
-- **YUV u RGB**: Quest snima slike u `YUV_420_888` formatu. Naš procesor vrši konverziju u standardni RGB format koristeći OpenCV.
-- **Sirova Dubina (Raw Depth)**: Depth mape se učitavaju kao `float32` vrednosti iz `.raw` fajlova. Pošto Quest 3 generiše dubinu u metrima, vršimo skaliranje i čišćenje nevalidnih vrednosti (Infinity/NaN).
-
-### 2. Geometrijska Integracija (TSDF)
-Koristimo **Scalable TSDF Volume** (iz Open3D biblioteke) koji funkcioniše na sledeći način:
-- Svaki RGB-D frejm se projektuje u 3D prostor koristeći **intrinsics** parametre (focal length, principal point) i **pose** (poziciju i rotaciju headset-a).
-- Podaci se akumuliraju u volumetrijsku mrežu (voxels).
-- Na kraju se koristi **Marching Cubes** algoritam za ekstrakciju finalnog trouglastog mesha.
+1. **Loading Data**:
+   - Click **"Load Folder"** and select the extracted folder containing Quest data.
+   - The program will automatically detect the Quest format and create `frames.json` (if it doesn't already exist).
+2. **Settings**:
+   - Click the gear icon (top right).
+   - **Voxel Size**: Set to `0.02` for a good balance, or `0.01` for high quality.
+   - **Frame Interval**: Set to `1` to process every frame, or `5` for a quick preview.
+3. **Reconstruction**:
+   - Click **"Start Reconstruction"**.
+   - Monitor progress in the logs. Once finished, you will see the number of generated vertices.
+4. **Visualization**:
+   - Click **"Visualizer (External)"** to open the 3D preview.
 
 ---
 
-## 📂 Struktura Podataka (Meta Quest format)
+## 🛠️ Technical Pipeline
 
-Program očekuje sledeće fajlove u folderu:
-- `frames.json`: Glavni indeks sa pozama i putanjama.
-- `left_camera_raw/`: Sadrži `.yuv` slike.
-- `left_depth/`: Sadrži `.raw` depth mape.
-- `left_camera_image_format.json`: Informacije o rezoluciji slika.
-- `left_depth_descriptors.csv`: Informacije o rezoluciji i opsegu dubine.
+### 1. Image Data Preprocessing
+- **YUV to RGB**: Quest captures images in `YUV_420_888` format. Our processor converts this to the standard RGB format using OpenCV.
+- **Raw Depth**: Depth maps are loaded as `float32` values from `.raw` files. Since Quest 3 generates depth in meters, we perform scaling and cleanup of invalid values (Infinity/NaN).
+
+### 2. Geometric Integration (TSDF)
+We use **Scalable TSDF Volume** (from the Open3D library) which works as follows:
+- Each RGB-D frame is projected into 3D space using **intrinsics** parameters (focal length, principal point) and **pose** (headset position and rotation).
+- Data is accumulated into a volumetric grid (voxels).
+- Finally, the **Marching Cubes** algorithm is used to extract the final triangle mesh.
 
 ---
 
-## 💡 Saveti za najbolje rezultate
+## 📂 Data Structure (Meta Quest format)
 
-- **Osvetljenje**: Snimajte prostore sa dobrim, difuznim osvetljenjem kako bi YUV slike bile jasne.
-- **Brzina kretanja**: Pomerajte se polako dok snimate. Brzi pokreti uzrokuju motion blur koji kvari 3D rekonstrukciju.
-- **Preklapanje (Overlap)**: Obezbedite da se frejmovi preklapaju (kružite oko objekata) kako bi TSDF volumen mogao da spoji delove scene.
-- **Voxel Size**: Ako imate 0 vertices na kraju, proverite da li je `Voxel Size` previše mali za nivo šuma u depth mapi. `0.02` je obično sigurna vrednost.
+The program expects the following files in the folder:
+- `frames.json`: Main index with poses and paths.
+- `left_camera_raw/`: Contains `.yuv` images.
+- `left_depth/`: Contains `.raw` depth maps.
+- `left_camera_image_format.json`: Information about image resolution.
+- `left_depth_descriptors.csv`: Information about depth resolution and range.
 
-## 📦 Zavisnosti
-Aplikacija koristi:
-- **Flet**: Za moderan korisnički interfejs.
-- **Open3D**: Za moćnu 3D obradu i vizuelizaciju.
-- **OpenCV & NumPy**: Za brzu obradu piksela i nizova.
+---
+
+## 💡 Tips for Best Results
+
+- **Lighting**: Capture spaces with good, diffused lighting so YUV images are clear.
+- **Movement Speed**: Move slowly while recording. Fast movements cause motion blur, which ruins 3D reconstruction.
+- **Overlap**: Ensure frames overlap (circle around objects) so the TSDF volume can merge scene parts.
+- **Voxel Size**: If you get 0 vertices at the end, check if the `Voxel Size` is too small for the noise level in the depth map. `0.02` is usually a safe value.
+
+## 📦 Dependencies
+The application uses:
+- **Flet**: For a modern user interface.
+- **Open3D**: For powerful 3D processing and visualization.
+- **OpenCV & NumPy**: For fast pixel and array processing.
