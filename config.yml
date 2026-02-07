@@ -1,0 +1,15 @@
+export:
+  format: ply
+  save_mesh: true
+  save_pointcloud: false
+ingestion:
+  validation_checksum: true
+reconstruction:
+  block_count: 50000
+  block_resolution: 16
+  confidence_threshold: 0.05
+  depth_max: 2.0
+  trunc_voxel_multiplier: 8.0
+  use_confidence_filtered_depth: true
+  valid_count_threshold: 4
+  voxel_size: 0.01
