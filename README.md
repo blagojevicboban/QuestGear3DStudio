@@ -1,81 +1,79 @@
 # QuestStream 3D Processor
 
-QuestStream is a Python-based tool for reconstructing 3D meshes from data captured by Meta Quest 3 headsets. It processes RGB images, depth maps, and camera pose data to generate high-quality 3D models using TSDF (Truncated Signed Distance Function) integration.
+QuestStream je moćan Python alat za rekonstrukciju 3D modela iz podataka snimljenih putem **Meta Quest 3** headseta. Aplikacija procesira RGB slike, depth mape i podatke o poziciji kamere kako bi generisala visokokvalitetne 3D meševe koristeći TSDF (Truncated Signed Distance Function) integraciju.
 
-## Features
+## Glavne Funkcionalnosti
 
--   **Data Ingestion**: validaties and extracts Quest capture data (ZIP format).
--   **3D Reconstruction**: Uses Open3D's ScalableTSDFVolume for robust mesh generation.
--   **GUI**: User-friendly interface built with PyQt6.
--   **Visualization**: Built-in 3D visualizer for inspecting results.
--   **Configuration**: Customizable reconstruction parameters via YAML.
+-   **Moderan UI**: Korisnički interfejs izgrađen pomoću **Flet** (Flutter for Python) sa tamnom temom.
+-   **Validacija Podataka**: Automatska provera integriteta ZIP fajlova pre ekstrakcije.
+-   **Prošireni Logovi**: Detaljan ispis svih procesa (raspakivanje, procesiranje frejmova, ekstrakcija modela) sa vremenskim markerima.
+-   **3D Rekonstrukcija**: Optimizovana integracija frejmova koristeći ScalableTSDFVolume.
+-   **Vizuelizacija**: Integrisani Open3D pregledač za inspekciju generisanog modela.
+-   **Konfiguracija**: Lako podešavanje parametara (voxel size, max depth) direktno u aplikaciji.
 
-## Prerequisites
+## Preduslovi
 
 -   Windows 10/11
--   Python 3.11 or higher
+-   Python 3.10 ili 3.11 (Preporučeno zbog podrške za `open3d`)
+-   Meta Quest 3 podaci u ZIP formatu
 
-## Installation
+## Instalacija
 
-1.  **Clone the repository:**
+1.  **Klonirajte repozitorijum:**
     ```bash
     git clone https://github.com/yourusername/QuestStream.git
     cd QuestStream
     ```
 
-2.  **Create a virtual environment (recommended):**
+2.  **Kreirajte virtuelno okruženje:**
     ```bash
     python -m venv venv
     .\venv\Scripts\activate
     ```
 
-3.  **Install dependencies:**
+3.  **Instalirajte zavisnosti:**
     ```bash
     pip install -r requirements.txt
     ```
 
-## Usage
+## Upotreba
 
-1.  **Run the application:**
+1.  **Pokretanje aplikacija:**
     ```bash
     python main.py
     ```
 
-2.  **Load Data:**
-    -   Click **File > Load ZIP**.
-    -   Select a valid ZIP file containing the Quest capture data.
-    -   **ZIP Structure Requirement**:
-        -   `frames.json`: Metadata for each frame (timestamp, pose, intrinsics).
-        -   `raw_images/`: Directory containing YUV/BIN image files.
-        -   `depth_maps/`: Directory containing depth map files.
+2.  **Učitavanje podataka:**
+    -   Kliknite na dugme **Load ZIP**.
+    -   Aplikacija će automatski otvoriti `D:\METAQUEST` ukoliko on postoji.
+    -   ZIP mora sadržati:
+        -   `frames.json`: Meta podaci (intrinsics, pose, timestamps).
+        -   `raw_images/`: Folder sa BIN/YUV slikama.
+        -   `depth_maps/`: Folder sa dubinskim mapama.
 
-3.  **Start Reconstruction:**
-    -   Once extraction is complete, click **Start Reconstruction**.
-    -   Monitor progress via the progress bar and status label.
+3.  **Procesiranje:**
+    -   Nakon ekstrakcije, kliknite **Start Reconstruction**.
+    -   Pratite napredak preko progres bara i detaljnih logova na dnu ekrana.
 
-4.  **Visualize:**
-    -   When reconstruction consists finishes, click **Visualizer (External)** to view the 3D mesh.
+4.  **Pregled:**
+    -   Po završetku, kliknite **Visualizer (External)** da otvorite interaktivni 3D prikaz.
 
-## Configuration
+## Projektna Struktura
 
-You can adjust reconstruction parameters in `config.yml` or via **File > Settings** in the GUI.
-
-**Key Parameters:**
--   `reconstruction.voxel_size`: Size of valid voxels (smaller = higher detail, more RAM). Default: `0.01` (1cm).
--   `reconstruction.block_count`: Pre-allocated memory blocks.
--   `reconstruction.depth_max`: Maximum depth to integrate (in meters).
--   `reconstruction.use_confidence_filtered_depth`: Enable bilateral filtering for depth maps.
-
-## Project Structure
-
--   `main.py`: Application entry point.
+-   `main.py`: Ulazna tačka aplikacije.
 -   `modules/`:
-    -   `gui.py`: Main window and UI logic.
-    -   `reconstruction.py`: Open3D TSDF volume integration logic.
-    -   `ingestion.py`: ZIP validation and extraction.
-    -   `image_processing.py`: YUV to RGB conversion and depth filtering.
-    -   `config_manager.py`: Configuration handling.
+    -   `gui.py`: Frontend logika (Flet) i upravljanje procesnim nitima.
+    -   `reconstruction.py`: Implementacija TSDF rekonstrukcije.
+    -   `ingestion.py`: Validacija i asinhrono raspakivanje podataka.
+    -   `image_processing.py`: Obrada slike (YUV -> RGB) i filtriranje dubine.
+    -   `config_manager.py`: Upravljanje podešavanjima putem YAML fajla.
+-   `.agent/workflows/app-guide.md`: Detaljan vodič za razvoj i bildovanje.
 
-## License
+## Razvoj i Debugging
+
+Za detaljne instrukcije o tome kako se aplikacija debugeuje i bilduje u izvršni fajl, pogledajte:
+`/.agent/workflows/app-guide.md`
+
+## Licenca
 
 [MIT License](LICENSE)

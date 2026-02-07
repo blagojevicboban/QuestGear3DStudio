@@ -1,41 +1,57 @@
+"""
+Main GUI module for QuestStream 3D Processor.
+Handles user interaction, thread management, and UI rendering using Flet.
+"""
+
 import os
 import json
-import cv2
+import threading
+import time
 import numpy as np
-import open3d as o3d
-from PyQt6.QtCore import QThread, pyqtSignal, Qt
-from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                             QPushButton, QLabel, QFileDialog, QProgressBar, QMessageBox)
+import flet as ft
+from datetime import datetime
+
+try:
+    import open3d as o3d
+    HAS_OPEN3D = True
+except ImportError:
+    HAS_OPEN3D = False
+    o3d = None
 
 from .config_manager import ConfigManager
 from .ingestion import ZipValidator, AsyncExtractor
 from .reconstruction import QuestReconstructor
 from .image_processing import yuv_to_rgb, filter_depth
 
-class ReconstructionThread(QThread):
-    progress = pyqtSignal(int)
-    status = pyqtSignal(str)
-    finished = pyqtSignal(object) # signal emitting the final mesh
-    error = pyqtSignal(str)
-
-    def __init__(self, data_dir, config_manager):
+class ReconstructionThread(threading.Thread):
+    """
+    Worker thread that handles the 3D reconstruction process.
+    Iterates through frames, processes images, and integrates them into the TSDF volume.
+    """
+    def __init__(self, data_dir, config_manager, on_progress=None, on_status=None, on_log=None, on_finished=None, on_error=None):
         super().__init__()
         self.data_dir = data_dir
         self.config_manager = config_manager
+        self.on_progress = on_progress
+        self.on_status = on_status
+        self.on_log = on_log
+        self.on_finished = on_finished
+        self.on_error = on_error
         self._is_running = True
 
     def run(self):
         try:
-            self.status.emit("Initializing Reconstructor...")
+            if self.on_status: self.on_status("Initializing Reconstructor...")
+            if self.on_log: self.on_log("Initializing Reconstructor...")
             reconstructor = QuestReconstructor(self.config_manager)
             
             # Load frames.json
+            if self.on_log: self.on_log(f"Loading frames from {self.data_dir}")
             frames_path = os.path.join(self.data_dir, "frames.json")
             with open(frames_path, "r") as f:
                 frames_data = json.load(f)
             
             if isinstance(frames_data, list):
-                # Handle list of frames format
                 pass
             elif isinstance(frames_data, dict) and "frames" in frames_data:
                 frames_data = frames_data["frames"]
@@ -46,20 +62,12 @@ class ReconstructionThread(QThread):
                 if not self._is_running:
                     break
                 
-                # Assuming 'file_path' or timestamp linkage
-                # Fallbck to timestamp-based filenames
                 timestamp = frame.get("timestamp")
                 
-                # Try to determine paths
                 if "file_path" in frame:
                     img_path = os.path.join(self.data_dir, frame["file_path"])
-                    # Assume depth path is similar or in depth_maps/
                     depth_path = img_path.replace("raw_images", "depth_maps").replace(".jpg", ".png").replace(".bin", ".bin") 
                 else:
-                    # Construct paths based on description
-                    # raw_images/timestamp.[bin|yuv]
-                    # depth_maps/timestamp.[bin|depth]
-                    # We'll check for common extensions
                     base_img = os.path.join(self.data_dir, "raw_images", str(timestamp))
                     if os.path.exists(base_img + ".bin"): img_path = base_img + ".bin"
                     elif os.path.exists(base_img + ".yuv"): img_path = base_img + ".yuv"
@@ -71,12 +79,9 @@ class ReconstructionThread(QThread):
                     else: depth_path = None
 
                 if not img_path or not os.path.exists(img_path):
-                    print(f"Skipping frame {i}: Image not found {img_path}")
+                    if self.on_log: self.on_log(f"Skipping frame {i}: Image not found {img_path}")
                     continue
 
-                # Parse Intrinsics & Pose
-                # intrinsics: [fx, fy, cx, cy] or 3x3 matrix?
-                # prompt says: "intrinsics: Camera focal length and principal point."
                 intrinsics_data = frame.get("intrinsics")
                 if isinstance(intrinsics_data, list) and len(intrinsics_data) == 4:
                     fx, fy, cx, cy = intrinsics_data
@@ -90,175 +95,252 @@ class ReconstructionThread(QThread):
                     intrinsics = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
                     w, h = int(cx * 2), int(cy * 2)
                 else:
-                    print(f"Skipping frame {i}: Invalid intrinsics format")
+                    if self.on_log: self.on_log(f"Skipping frame {i}: Invalid intrinsics format")
                     continue
 
-                # Parse Pose (4x4 matrix)
                 pose_data = frame.get("pose")
                 pose = np.array(pose_data).reshape(4, 4)
 
-                # Load Raw Images
-                # YUV420 reading
-                # Size: w * h * 1.5 bytes
-                # We need exact resolution. 
-                # If we don't have it, we might fail.
-                
                 with open(img_path, 'rb') as f:
                     yuv_data = np.frombuffer(f.read(), dtype=np.uint8)
                     yuv_img = yuv_data.reshape((int(h * 1.5), w))
                     rgb = yuv_to_rgb(yuv_img)
 
-                # Load Depth (16-bit or 32-bit float?)
-                # Prompt: "Normalized 16-bit or 32-bit depth buffers"
-                # If 16-bit, it's usually millimeters.
                 with open(depth_path, 'rb') as f:
-                    # Try reading as uint16 first
                     depth_data = np.frombuffer(f.read(), dtype=np.uint16)
                     if depth_data.size != w * h:
-                        # Maybe float32?
                         f.seek(0)
                         depth_data = np.frombuffer(f.read(), dtype=np.float32)
                     
                     depth = depth_data.reshape((h, w))
 
-                # Filtering (Optional)
                 if self.config_manager.get("reconstruction.use_confidence_filtered_depth"):
                     depth = filter_depth(depth)
 
-                # Integration
                 reconstructor.integrate_frame(rgb, depth, intrinsics, pose)
                 
-                self.status.emit(f"Processed frame {i+1}/{total_frames}")
-                self.progress.emit(int(((i + 1) / total_frames) * 100))
+                msg = f"Processed frame {i+1}/{total_frames}"
+                if self.on_status: self.on_status(msg)
+                if self.on_log: self.on_log(msg)
+                if self.on_progress: self.on_progress((i + 1) / total_frames)
                 
-            self.status.emit("Extracting Mesh...")
+            if self.on_log: self.on_log("Extracting Mesh...")
+            if self.on_status: self.on_status("Extracting Mesh...")
             mesh = reconstructor.extract_mesh()
-            self.finished.emit(mesh)
+            if self.on_log: self.on_log(f"Mesh extraction complete. Vertices: {len(mesh.vertices)}")
+            if self.on_finished: self.on_finished(mesh)
             
         except Exception as e:
-            self.error.emit(str(e))
+            if self.on_error: self.on_error(str(e))
+            if self.on_log: self.on_log(f"ERROR: {str(e)}")
 
     def stop(self):
         self._is_running = False
 
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.config_manager = ConfigManager()
-        self.setWindowTitle("QuestStream 3D Processor")
-        self.resize(1024, 768)
-        self.init_ui()
-        self.temp_dir = None
+def main(page: ft.Page):
+    page.title = "QuestStream 3D Processor"
+    page.theme_mode = ft.ThemeMode.DARK
+    page.window_width = 1024
+    page.window_height = 768
+    
+    config_manager = ConfigManager()
+    
+    # State
+    temp_dir = None
+    current_mesh = None
+    
+    # Controls
+    status_text = ft.Text("Ready")
+    progress_bar = ft.ProgressBar(value=0, visible=False)
+    log_list = ft.ListView(expand=True, spacing=2, auto_scroll=True)
+    
+    btn_process = ft.ElevatedButton("Start Reconstruction", disabled=True)
+    btn_visualize = ft.ElevatedButton("Visualizer (External)", disabled=True)
 
-    def init_ui(self):
-        # Menu Bar
-        menu_bar = self.menuBar()
-        file_menu = menu_bar.addMenu("File")
-        
-        open_action = file_menu.addAction("Load ZIP")
-        open_action.triggered.connect(self.load_zip)
-        
-        settings_action = file_menu.addAction("Settings")
-        settings_action.triggered.connect(self.open_settings)
-        
-        exit_action = file_menu.addAction("Exit")
-        exit_action.triggered.connect(self.close)
+    def add_log(msg):
+        now = datetime.now().strftime("%H:%M:%S")
+        log_list.controls.append(ft.Text(f"[{now}] {msg}", font_family="Consolas", size=12))
+        if len(log_list.controls) > 100:
+            log_list.controls.pop(0)
+        page.update()
 
-        # Central Widget
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
-        
-        # Top Controls
-        controls_layout = QHBoxLayout()
-        self.btn_process = QPushButton("Start Reconstruction")
-        self.btn_process.setEnabled(False)
-        self.btn_process.clicked.connect(self.start_reconstruction)
-        controls_layout.addWidget(self.btn_process)
-        
-        self.btn_visualize = QPushButton("Visualizer (External)")
-        self.btn_visualize.setEnabled(False)
-        self.btn_visualize.clicked.connect(self.show_visualizer)
-        controls_layout.addWidget(self.btn_visualize)
-        
-        layout.addLayout(controls_layout)
+    def show_msg(text):
+        page.snack_bar = ft.SnackBar(content=ft.Text(text))
+        page.snack_bar.open = True
+        page.update()
 
-        # Progress
-        self.progress_bar = QProgressBar()
-        layout.addWidget(self.progress_bar)
-        
-        self.status_label = QLabel("Ready")
-        layout.addWidget(self.status_label)
-        
-        # Placeholder for 3D View (or results info)
-        self.info_label = QLabel("No Data Loaded")
-        self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.info_label.setStyleSheet("background-color: #333; color: #fff; font-size: 14px;")
-        layout.addWidget(self.info_label, stretch=1)
+    def on_img_load_progress(val):
+        progress_bar.value = val / 100.0
+        page.update()
 
-    def open_settings(self):
-        dialog = SettingsDialog(self.config_manager, self)
-        if dialog.exec():
-            self.status_label.setText("Settings saved.")
+    def on_img_load_finished(path):
+        nonlocal temp_dir
+        temp_dir = path
+        progress_bar.visible = False
+        status_text.value = f"Extracted to {path}"
+        btn_process.disabled = False
+        show_msg("Data loaded successfully.")
 
-    def load_zip(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open Quest Capture ZIP", "", "ZIP Files (*.zip)")
-        if file_path:
-            self.status_label.setText("Validating ZIP...")
-            valid, msg = ZipValidator.validate(file_path)
+    def on_img_load_error(err):
+        progress_bar.visible = False
+        status_text.value = "Extraction Failed"
+        add_log(f"Extraction Error: {err}")
+        show_msg(f"Error: {err}")
+
+    def load_zip_result(e):
+        if e.files and len(e.files) > 0:
+            file_path = e.files[0].path
+            log_list.controls.clear()
+            add_log(f"Selected file: {file_path}")
+            
+            status_text.value = "Validating ZIP structure..."
+            page.update()
+            
+            add_log("Starting ZIP validation...")
+            valid, msg = ZipValidator.validate(file_path, log_callback=add_log)
             if not valid:
-                QMessageBox.critical(self, "Error", f"Invalid ZIP: {msg}")
+                status_text.value = "Invalid ZIP"
+                show_msg(f"Invalid ZIP: {msg}")
+                add_log(f"Validation FAILED: {msg}")
                 return
+
+            status_text.value = "Extracting..."
+            progress_bar.visible = True
+            progress_bar.value = None
+            page.update()
             
-            self.status_label.setText("Extracting...")
-            self.progress_bar.setRange(0, 0) # Indeterminate
-            
-            self.extractor = AsyncExtractor(file_path)
-            self.extractor.finished.connect(self.on_extraction_finished)
-            self.extractor.error.connect(self.on_extraction_error)
-            self.extractor.start()
+            extractor = AsyncExtractor(
+                file_path,
+                on_progress=on_img_load_progress,
+                on_finished=on_img_load_finished,
+                on_error=on_img_load_error,
+                on_log=add_log
+            )
+            extractor.start()
 
-    def on_extraction_finished(self, temp_dir):
-        self.temp_dir = temp_dir
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.status_label.setText(f"Extracted to {temp_dir}")
-        self.btn_process.setEnabled(True)
-        QMessageBox.information(self, "Success", "Data loaded successfully.")
+    file_picker = ft.FilePicker()
+    file_picker.on_result = load_zip_result
+    page.overlay.append(file_picker)
 
-    def on_extraction_error(self, msg):
-        self.progress_bar.setRange(0, 100)
-        self.status_label.setText("Extraction Failed")
-        QMessageBox.critical(self, "Error", f"Extraction failed: {msg}")
+    def on_reconstruct_progress(val):
+        progress_bar.value = val
+        page.update()
 
-    def start_reconstruction(self):
-        if not self.temp_dir:
+    def on_reconstruct_finished(mesh):
+        nonlocal current_mesh
+        current_mesh = mesh
+        status_text.value = "Reconstruction Complete"
+        btn_process.disabled = False
+        btn_visualize.disabled = False
+        add_log(f"Reconstruction finished with {len(mesh.vertices)} vertices.")
+        progress_bar.visible = False
+        page.update()
+
+    def on_reconstruct_error(err):
+        status_text.value = "Reconstruction Failed"
+        btn_process.disabled = False
+        add_log(f"Reconstruction Error: {err}")
+        progress_bar.visible = False
+        show_msg(f"Error: {err}")
+
+    def start_reconstruction(e):
+        if not temp_dir:
+            return
+        
+        btn_process.disabled = True
+        status_text.value = "Initializing..."
+        progress_bar.visible = True
+        progress_bar.value = 0
+        page.update()
+        
+        thread = ReconstructionThread(
+            temp_dir,
+            config_manager,
+            on_progress=on_reconstruct_progress,
+            on_status=lambda s: (setattr(status_text, "value", s) or page.update()),
+            on_log=add_log,
+            on_finished=on_reconstruct_finished,
+            on_error=on_reconstruct_error
+        )
+        thread.start()
+
+    btn_process.on_click = start_reconstruction
+
+    def show_visualizer(e):
+        if not HAS_OPEN3D:
+            show_msg("Visualizer not available (Open3D missing).")
             return
             
-        self.btn_process.setEnabled(False)
-        self.reconstructor_thread = ReconstructionThread(self.temp_dir, self.config_manager)
-        self.reconstructor_thread.progress.connect(self.progress_bar.setValue)
-        self.reconstructor_thread.status.connect(self.status_label.setText)
-        self.reconstructor_thread.finished.connect(self.on_reconstruction_finished)
-        self.reconstructor_thread.error.connect(self.on_reconstruction_error)
-        self.reconstructor_thread.start()
+        if current_mesh and hasattr(current_mesh, 'vertices') and len(current_mesh.vertices) > 0:
+            o3d.visualization.draw_geometries([current_mesh], window_name="QuestStream Result")
+        else:
+            show_msg("No mesh to visualize.")
 
-    def on_reconstruction_finished(self, mesh):
-        self.current_mesh = mesh
-        self.status_label.setText("Reconstruction Complete")
-        self.btn_process.setEnabled(True)
-        self.btn_visualize.setEnabled(True)
-        self.info_label.setText(f"Mesh generated with {len(mesh.vertices)} vertices.")
-        
-        # Auto-save for convenience
-        # o3d.io.write_triangle_mesh("output.ply", mesh)
+    btn_visualize.on_click = show_visualizer
 
-    def on_reconstruction_error(self, msg):
-        self.status_label.setText("Reconstruction Failed")
-        self.btn_process.setEnabled(True)
-        QMessageBox.critical(self, "Error", f"Reconstruction error: {msg}")
+    # Settings Dialog
+    voxel_input = ft.TextField(label="Voxel Size (m)", value=str(config_manager.get("reconstruction.voxel_size", 0.01)))
+    depth_max_input = ft.TextField(label="Max Depth (m)", value=str(config_manager.get("reconstruction.depth_max", 3.0)))
+    filter_check = ft.Checkbox(label="Filter Depth", value=config_manager.get("reconstruction.use_confidence_filtered_depth", True))
 
-    def show_visualizer(self):
-        if hasattr(self, 'current_mesh') and self.current_mesh:
-            o3d.visualization.draw_geometries([self.current_mesh], window_name="QuestStream Result")
+    def save_settings(e):
+        try:
+            config_manager.set("reconstruction.voxel_size", float(voxel_input.value))
+            config_manager.set("reconstruction.depth_max", float(depth_max_input.value))
+            config_manager.set("reconstruction.use_confidence_filtered_depth", filter_check.value)
+            settings_dialog.open = False
+            show_msg("Settings saved")
+        except ValueError:
+            show_msg("Invalid numerical values")
 
+    settings_dialog = ft.AlertDialog(
+        title=ft.Text("Settings"),
+        content=ft.Column([voxel_input, depth_max_input, filter_check], tight=True),
+        actions=[
+            ft.TextButton("Cancel", on_click=lambda e: (setattr(settings_dialog, "open", False), page.update())),
+            ft.TextButton("Save", on_click=save_settings),
+        ],
+    )
+
+    def open_settings(e):
+        page.dialog = settings_dialog
+        settings_dialog.open = True
+        page.update()
+
+    # Layout
+    page.appbar = ft.AppBar(
+        title=ft.Text("QuestStream 3D Processor"),
+        bgcolor=ft.Colors.BLUE_800,
+        actions=[
+            ft.IconButton(icon=ft.Icons.SETTINGS, on_click=open_settings),
+        ]
+    )
+
+    main_layout = ft.Column([
+        ft.Row([
+            ft.ElevatedButton("Load ZIP", icon=ft.Icons.UPLOAD_FILE, on_click=lambda _: file_picker.pick_files(
+                dialog_title="Open Quest Capture ZIP",
+                allowed_extensions=["zip"],
+                initial_directory="D:\\METAQUEST" if os.path.exists("D:\\METAQUEST") else None
+            )),
+            btn_process,
+            btn_visualize
+        ]),
+        progress_bar,
+        status_text,
+        ft.Divider(),
+        ft.Text("Process Logs:", size=16, weight="bold"),
+        ft.Container(
+            content=log_list,
+            expand=True,
+            bgcolor="#1e1e1e",
+            border_radius=5,
+            padding=10
+        )
+    ], expand=True)
+
+    page.add(main_layout)
+    page.update()
+
+if __name__ == "__main__":
+    ft.app(target=main)

@@ -1,14 +1,10 @@
-import sys
-from PyQt6.QtWidgets import QApplication
-from modules.gui import MainWindow
+import flet as ft
+from modules.gui import main as gui_main
 
 def main():
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
     print("Application starting...")
-    sys.exit(app.exec())
-    # print("QuestStream 3D Processor Initialized")
+    # Using ft.app() for Flet 0.26.0 compatibility
+    ft.app(target=gui_main)
 
 if __name__ == "__main__":
     main()
