@@ -11,6 +11,8 @@ DEFAULT_CONFIG = {
         "valid_count_threshold": 4,
         "block_resolution": 16,
         "block_count": 50000,
+        "frame_interval": 5,
+        "camera": "left"
     },
     "ingestion": {
         "validation_checksum": True,

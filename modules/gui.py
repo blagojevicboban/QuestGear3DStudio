@@ -58,8 +58,8 @@ class ReconstructionThread(threading.Thread):
                     self.on_status(f"Processing: {p}%") if self.on_status else None
                 ),
                 on_log=self.on_log,
-                camera='left',
-                frame_interval=5  # Every 5th frame for performance
+                camera=self.config_manager.get("reconstruction.camera", "left"),
+                frame_interval=int(self.config_manager.get("reconstruction.frame_interval", 5))
             )
             
             if result and result.get('mesh'):
@@ -281,33 +281,48 @@ def main(page: ft.Page):
     btn_visualize.on_click = show_visualizer
 
     # Settings Dialog
-    voxel_input = ft.TextField(label="Voxel Size (m)", value=str(config_manager.get("reconstruction.voxel_size", 0.01)))
-    depth_max_input = ft.TextField(label="Max Depth (m)", value=str(config_manager.get("reconstruction.depth_max", 3.0)))
+    voxel_input = ft.TextField(label="Voxel Size (m)", value=str(config_manager.get("reconstruction.voxel_size", 0.02)))
+    depth_max_input = ft.TextField(label="Max Depth (m)", value=str(config_manager.get("reconstruction.depth_max", 10.0)))
+    frame_int_input = ft.TextField(label="Frame Interval", value=str(config_manager.get("reconstruction.frame_interval", 5)))
+    camera_dropdown = ft.Dropdown(
+        label="Camera",
+        value=config_manager.get("reconstruction.camera", "left"),
+        options=[
+            ft.dropdown.Option("left", "Left Camera"),
+            ft.dropdown.Option("right", "Right Camera"),
+        ]
+    )
     filter_check = ft.Checkbox(label="Filter Depth", value=config_manager.get("reconstruction.use_confidence_filtered_depth", True))
 
     def save_settings(e):
         try:
             config_manager.set("reconstruction.voxel_size", float(voxel_input.value))
             config_manager.set("reconstruction.depth_max", float(depth_max_input.value))
+            config_manager.set("reconstruction.frame_interval", int(frame_int_input.value))
+            config_manager.set("reconstruction.camera", camera_dropdown.value)
             config_manager.set("reconstruction.use_confidence_filtered_depth", filter_check.value)
-            settings_dialog.open = False
+            page.close(settings_dialog)
             show_msg("Settings saved")
         except ValueError:
             show_msg("Invalid numerical values")
 
     settings_dialog = ft.AlertDialog(
         title=ft.Text("Settings"),
-        content=ft.Column([voxel_input, depth_max_input, filter_check], tight=True),
+        content=ft.Column([
+            voxel_input, 
+            depth_max_input, 
+            frame_int_input,
+            camera_dropdown,
+            filter_check
+        ], tight=True, scroll=ft.ScrollMode.AUTO),
         actions=[
-            ft.TextButton("Cancel", on_click=lambda e: (setattr(settings_dialog, "open", False), page.update())),
+            ft.TextButton("Cancel", on_click=lambda _: page.close(settings_dialog)),
             ft.TextButton("Save", on_click=save_settings),
         ],
     )
 
     def open_settings(e):
-        page.dialog = settings_dialog
-        settings_dialog.open = True
-        page.update()
+        page.open(settings_dialog)
 
     # Layout
     page.appbar = ft.AppBar(

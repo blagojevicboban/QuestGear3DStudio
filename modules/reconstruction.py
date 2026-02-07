@@ -84,10 +84,20 @@ class QuestReconstructor:
         if not self.volume:
             return
 
+        # Quest depth is in meters (float32), not millimeters
+        # Clamp invalid values (inf, nan, negative)
+        depth_cleaned = np.copy(depth_image).astype(np.float32)
+        depth_cleaned[~np.isfinite(depth_cleaned)] = 0.0
+        depth_cleaned[depth_cleaned < 0] = 0.0
+        depth_cleaned[depth_cleaned > self.depth_max] = 0.0
+        
+        # Convert to uint16 in millimeters for Open3D
+        depth_mm = (depth_cleaned * 1000.0).astype(np.uint16)
+
         rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
             o3d.geometry.Image(rgb_image),
-            o3d.geometry.Image(depth_image),
-            depth_scale=1000.0, # Assuming depth is in mm. Check input!
+            o3d.geometry.Image(depth_mm),
+            depth_scale=1000.0,  # Now correct since we converted to mm
             depth_trunc=self.depth_max,
             convert_rgb_to_intensity=False
         )
