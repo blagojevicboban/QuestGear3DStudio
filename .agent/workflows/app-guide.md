@@ -1,42 +1,42 @@
 ---
-description: Kako pokrenuti, debugeovati i bildovati QuestStream aplikaciju.
+description: How to run, debug and build the QuestStream application.
 ---
 
-### 1. Pokretanje (Run)
-Za standardno pokretanje aplikacije tokom razvoja koristite:
+### 1. Run
+For standard application startup during development, use:
 ```powershell
 python main.py
 ```
-Ili direktno preko Flet-a (omogućava hot-reload za UI promene):
+Or directly via Flet (allows hot-reload for UI changes):
 ```powershell
 python -m flet run main.py
 ```
 
-### 2. Debugovanje (Debug)
-Aplikacija je konfigurisana za rad sa VS Code debugger-om.
-1. Odaberite **"Python: Current File"** u Run and Debug panelu (ili pritisnite `F5`).
-2. Postavite breakpoint-ove u `modules/gui.py` ili `modules/reconstruction.py` kako biste pratili tok podataka.
-3. Logovi će se pojaviti u terminalu ali i unutar samog log prozora u aplikaciji.
+### 2. Debugging
+The application is configured to work with the VS Code debugger.
+1. Select **"Python: Current File"** in the Run and Debug panel (or press `F5`).
+2. Set breakpoints in `modules/gui.py` or `modules/reconstruction.py` to trace the data flow.
+3. Logs will appear in the terminal but also within the log window inside the application itself.
 
-### 3. Bildovanje (Build)
-Flet omogućava pretvaranje Python koda u standalone izvršne fajlove (.exe).
+### 3. Building
+Flet allows converting Python code into standalone executable files (.exe).
 // turbo
-1. Prvo instalirajte flet build zavisnosti:
+1. First, install flet build dependencies:
    ```powershell
    pip install "flet[all]"
    ```
-2. Pokrenite komandu za bildovanje Windows aplikacije:
+2. Run the command to build the Windows application:
    ```powershell
    python -m flet build windows
    ```
-   *Napomena: Rezultat će biti u `build/windows` folderu.*
-3. Za kreiranje jednog .exe fajla (single-file):
+   *Note: The result will be in the `build/windows` folder.*
+3. To create a single-file executable:
    ```powershell
    python -m flet build windows --include-all-files
    ```
 
-### 4. Zavisnosti
-Uvek proverite da li su sve biblioteke instalirane:
+### 4. Dependencies
+Always check if all libraries are installed:
 ```powershell
 pip install -r requirements.txt
 ```

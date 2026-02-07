@@ -1,50 +1,50 @@
-# Arhitektura Projekta QuestStream
+# QuestStream Project Architecture
 
-Ovaj dokument opisuje tehnički dizajn i tok podataka unutar aplikacije.
+This document describes the technical design and data flow within the application.
 
-## 1. Pregled Komponenti
+## 1. Component Overview
 
-Aplikacija je podeljena na UI sloj i logički sloj (backend) koji komuniciraju putem callback funkcija u okviru paralelnih niti (threading).
+The application is divided into a UI layer and a logic layer (backend) that communicate via callback functions within parallel threads (threading).
 
-### UI Sloj (`modules/gui.py`)
-- Koristi **Flet** za renderovanje interfejsa.
-- Upravlja stanjem aplikacije (putanje do privremenih foldera, učitani meševi).
-- Pokreće asinhrone procese u pozadinskim nitima kako bi UI ostao responzivan.
-- Sadrži `add_log` funkciju koja centralizuje ispis svih operacija.
+### UI Layer (`modules/gui.py`)
+- Uses **Flet** for interface rendering.
+- Manages application state (paths to temporary folders, loaded meshes).
+- Launches asynchronous processes in background threads to keep the UI responsive.
+- Contains the `add_log` function which centralizes the output of all operations.
 
-### Ingestion Sloj (`modules/ingestion.py`)
-- **ZipValidator**: Proverava da li ZIP fajl ima ispravnu strukturu (prisustvo `frames.json` i potrebnih foldera).
-- **AsyncExtractor**: Nasleđuje `threading.Thread`. Raspakuje ZIP u privremeni folder sistema (`tempfile`).
+### Ingestion Layer (`modules/ingestion.py`)
+- **ZipValidator**: Checks if the ZIP file has a correct structure (presence of `frames.json` and required folders).
+- **AsyncExtractor**: Inherits from `threading.Thread`. Extracts the ZIP into a system temporary folder (`tempfile`).
 
-### Procesni Sloj (`modules/image_processing.py`)
-- Implementira low-level transformacije slika.
-- **yuv_to_rgb**: Konverzija iz NV12/NV21 formata (standard za Quest) u RGB koristeći OpenCV.
-- **filter_depth**: Primena bilateralnog filtera na depth mape radi smanjenja šuma pre integracije.
+### Processing Layer (`modules/image_processing.py`)
+- Implements low-level image transformations.
+- **yuv_to_rgb**: Conversion from NV12/NV21 format (standard for Quest) to RGB using OpenCV.
+- **filter_depth**: Application of a bilateral filter to depth maps for noise reduction before integration.
 
-### Rekonstrukcioni Sloj (`modules/reconstruction.py`)
-- Centralni deo backend-a koji koristi **Open3D**.
-- **QuestReconstructor**: Inicijalizuje `ScalableTSDFVolume`.
-- **Integracija**: Pretvara numeričke podatke u `RGBDImage` i integriše ih u 3D prostor koristeći matricu poze (pose).
+### Reconstruction Layer (`modules/reconstruction.py`)
+- Central part of the backend using **Open3D**.
+- **QuestReconstructor**: Initializes `ScalableTSDFVolume`.
+- **Integration**: Converts numerical data into `RGBDImage` and integrates them into 3D space using the pose matrix.
 
-## 2. Tok Podataka (Data Flow)
+## 2. Data Flow
 
-1. **Korisnik bira ZIP** -> `FilePicker` u GUI-u.
-2. **Validacija** -> `ZipValidator` proverava CRC i strukturu.
-3. **Ekstrakcija** -> `AsyncExtractor` raspakuje fajlove u `/tmp/quest_stream_XXXX`.
-4. **Pokretanje Rekonstrukcije**:
-   - `ReconstructionThread` čita `frames.json`.
-   - Za svaki frejm:
-     - Čita se BIN/YUV fajl -> `yuv_to_rgb`.
-     - Čita se Depth fajl -> `filter_depth`.
-     - Frame se integriše u `Volume`.
-5. **Finalizacija**: `extraxt_mesh()` generiše TriangleMesh objekat koji se šalje nazad u GUI za vizuelizaciju.
+1. **User selects ZIP** -> `FilePicker` in the GUI.
+2. **Validation** -> `ZipValidator` checks CRC and structure.
+3. **Extraction** -> `AsyncExtractor` extracts files to `_extracted` folder next to the zip (or system tmp previously).
+4. **Launch Reconstruction**:
+    - `ReconstructionThread` reads `frames.json`.
+    - For each frame:
+        - Read BIN/YUV file -> `yuv_to_rgb`.
+        - Read Depth file -> `filter_depth` (if configured).
+        - Frame is integrated into the `Volume`.
+5. **Finalization**: `extract_mesh()` generates a TriangleMesh object which is sent back to the GUI for visualization.
 
-## 3. Upravljanje Konfiguracijom
+## 3. Configuration Management
 
-Svi parametri se čuvaju u `config.yml`. `ConfigManager` omogućava:
-- Učitavanje podrazumevanih (default) vrednosti ako fajl ne postoji.
-- Dinamičko ažuriranje vrednosti putem Settings dijaloga bez restarta aplikacije.
+All parameters are stored in `config.yml`. `ConfigManager` enables:
+- Loading default values if the file does not exist.
+- Dynamic updating of values via the Settings dialog without restarting the application.
 
 ## 4. Error Handling
 
-Aplikacija koristi `try-except` blokove u svim kritičnim nitima. Greške se šalju nazad u GUI putem `on_error` callback-a i ispisuju se CRVENOM bojom u logovima (ili SnackBar obaveštenjima).
+The application uses `try-except` blocks in all critical threads. Errors are sent back to the GUI via the `on_error` callback and are printed in the logs (or SnackBar notifications).
