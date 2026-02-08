@@ -87,6 +87,11 @@ class AsyncExtractor(threading.Thread):
         self.on_finished = on_finished
         self.on_error = on_error
         self.on_log = on_log
+        self._is_running = True
+
+    def stop(self):
+        """Signal the extractor to stop."""
+        self._is_running = False
 
     def run(self):
         try:
@@ -112,6 +117,18 @@ class AsyncExtractor(threading.Thread):
                 log_every = max(1, total_files // 20) 
                 
                 for i, file in enumerate(file_list):
+                    # Check if we should stop
+                    if not self._is_running:
+                        if self.on_log: self.on_log("Extraction STOPPED by user.")
+                        # Clean up partial extraction
+                        if self.temp_dir and os.path.exists(self.temp_dir):
+                            zf.close() # Close ZIP before deleting folder
+                            shutil.rmtree(self.temp_dir)
+                        
+                        if self.on_error:
+                            self.on_error("Stopped")
+                        return # Exit thread
+
                     if i % log_every == 0:
                         if self.on_log: self.on_log(f"[{i+1}/{total_files}] Extracting: {file}")
                     
@@ -122,7 +139,13 @@ class AsyncExtractor(threading.Thread):
             if self.on_finished: self.on_finished(self.temp_dir)
             
         except Exception as e:
+            if not self._is_running:
+                # Already handled in loop
+                return
             if self.temp_dir and os.path.exists(self.temp_dir):
-                shutil.rmtree(self.temp_dir)
+                try:
+                    shutil.rmtree(self.temp_dir)
+                except:
+                    pass
             if self.on_error: self.on_error(str(e))
             if self.on_log: self.on_log(f"ERROR: {str(e)}")

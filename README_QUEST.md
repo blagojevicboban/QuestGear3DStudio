@@ -1,21 +1,22 @@
-# QuestStream 3D Processor - Documentation
-
-This tool enables 3D reconstruction of scenes captured using **Meta Quest 3** devices (using OpenQuestCapture or similar tools). The pipeline converts raw images and depth maps into a textured 3D model.
+# QuestGear 3D Studio - Documentation
+# 
+# This tool enables 3D reconstruction of scenes captured using **Meta Quest 3** devices (using OpenQuestCapture or similar tools). The pipeline converts raw images and depth maps into a textured 3D model.
 
 ## 🚀 Quick Start
 
 1. **Loading Data**:
-   - Click **"Load Folder"** and select the extracted folder containing Quest data.
-   - The program will automatically detect the Quest format and create `frames.json` (if it doesn't already exist).
+   - Click **"Load ZIP"** to select a capture or **"Load Folder"** for extracted data.
+   - The program will automatically adapt Quest data and create `frames.json` if needed.
 2. **Settings**:
-   - Click the gear icon (top right).
-   - **Voxel Size**: Set to `0.02` for a good balance, or `0.01` for high quality.
-   - **Frame Interval**: Set to `1` to process every frame, or `5` for a quick preview.
+   - Tweak **Voxel Size** (`0.02` recommended) and **Frame Interval** (`1-5`).
+   - Select your preferred output format (.obj, .ply, .glb).
 3. **Reconstruction**:
    - Click **"Start Reconstruction"**.
-   - Monitor progress in the logs. Once finished, you will see the number of generated vertices.
-4. **Visualization**:
-   - Click **"Visualizer (External)"** to open the 3D preview.
+   - Choose the format in the dialog and click **Start**.
+   - **Full Control**: Use the **Stop** button if you need to interrupt the process. The app will safely reset its state.
+4. **Export & Visualization**:
+   - Check the **"Export"** folder for your models (named with timestamps to avoid overwriting).
+   - Click **"Visualizer (External)"** to inspect the result in focus.
 
 ---
 

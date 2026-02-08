@@ -4,6 +4,7 @@ import json
 import numpy as np
 from pathlib import Path
 from threading import Thread
+from datetime import datetime
 
 from .quest_image_processor import QuestImageProcessor
 from .reconstruction import QuestReconstructor, HAS_OPEN3D
@@ -102,6 +103,43 @@ class QuestReconstructionPipeline:
         pose[:3, 3] = t.flatten()
         
         return pose
+
+    def convert_pose_unity_to_open3d(self, pose):
+        """
+        Convert Unity (Left-Handed, Y-Up) pose to Open3D (Right-Handed, Y-Down).
+        Transformation:
+        1. Flip Z axis (Left-Handed -> Right-Handed check).
+        2. Rotate 180 degrees around X axis (Y-Up -> Y-Down).
+        Effective Transformation: Scale(1, -1, -1) applied to the pose.
+        
+        Args:
+            pose: 4x4 homogenous matrix (Unity coordinates)
+            
+        Returns:
+            4x4 homogenous matrix (Open3D coordinates)
+        """
+        # Create scaling matrix S = diag(1, -1, -1, 1)
+        # This mirrors Y and Z axes.
+        # Why?
+        # Unity: +Y Up, +Z Forward (Left Handed)
+        # Open3D Camera: -Y Up, -Z Forward (Right Handed)
+        # So we flip Y and Z.
+        S = np.eye(4)
+        S[1, 1] = -1
+        S[2, 2] = -1
+        
+        # Apply transformation: P_new = S * P_old * S
+        # Pre-multiply by S flips the world axes.
+        # Post-multiply by S flips the local camera axes.
+        # We need to transform the camera pose itself.
+        
+        # Actually, simpler model:
+        # Just negate Z position? No, that mirrors the world.
+        # Just negate Z axis of rotation? That changes handedness.
+        
+        # Let's use the standard conversion logic:
+        # Open3D = S @ Unity @ S
+        return S @ pose @ S
     
     def run_reconstruction(
         self, 
@@ -136,32 +174,40 @@ class QuestReconstructionPipeline:
     def get_camera_extrinsics(self, camera='left'):
         """
         Get 4x4 homogenous matrix for Head-to-Camera transform.
+        Computes T_camera_head (Camera relative to Head).
         """
-        # Default extrinsics (approximate Quest 3 IPD ~64mm)
-        # Left eye is roughly -32mm on X, Right is +32mm
-        # TODO: Read from metadata if available (currently falling back to defaults)
-        
-        offset_x = -0.032 if camera == 'left' else 0.032
-        
-        # Identity rotation (assuming cameras are parallel to head forward)
-        # In reality, they might be canted (toed-in).
-        # Metadata check:
         cam_data = self.camera_metadata.get(camera, {})
+        
+        # Translation
+        # Default approximate offsets if missing
+        offset_x = -0.032 if camera == 'left' else 0.032
         translation = cam_data.get('translation', [offset_x, 0, 0])
-        rotation = cam_data.get('rotation_quat', [1, 0, 0, 0]) # w, x, y, z
+        t = np.array(translation)
         
-        # If metadata has translation, use it
-        if 'translation' in cam_data:
-             t = np.array(translation)
-        else:
-             t = np.array([offset_x, 0, 0])
-             
         # Rotation
-        # If metadata has rotation, convert it. Otherwise Identity.
-        # But for now, let's stick to simple Translation offset default.
+        # Quest 3 cameras are canted. We must apply this rotation.
+        # Format: [w, x, y, z] or [x, y, z, w]?
+        # quest_adapter.py reads: floats for rot_w, rot_x...
+        # metadata json: usually [w, x, y, z] or [x, y, z, w]
+        # Let's check a sample or assume standard Quest [x, y, z, w] or similar?
+        # quest_adapter used row['rot_w'] etc for poses.
+        # For metadata, it's a list. 
+        # Usually Unity JSON is [x, y, z, w].
+        # But let's check input list length/order.
+        # Standard convention in this pipeline seems to be [w, x, y, z] from build_pose_matrix.
         
-        R = np.eye(3) # Identity
-        
+        rotation = cam_data.get('rotation', None) # Check keys: 'rotation' or 'rotation_quat'?
+        if rotation is None:
+             rotation = cam_data.get('rotation_quat', [1, 0, 0, 0]) # Default Identity w=1
+             
+        # Ensure rotation is [w, x, y, z]
+        # If it's 3 elements, it's Euler. If 4, Quat.
+        if len(rotation) == 4:
+            # Assume [w, x, y, z] based on build_pose_matrix usage
+            R = self.quaternion_to_matrix(rotation)
+        else:
+            R = np.eye(3)
+            
         H = np.eye(4)
         H[:3, :3] = R
         H[:3, 3] = t
@@ -173,6 +219,7 @@ class QuestReconstructionPipeline:
         on_progress=None, 
         on_log=None,
         on_frame=None,
+        is_cancelled=None, # New parameter
         camera='left',
         frame_interval=1,
         start_frame=0,
@@ -185,6 +232,7 @@ class QuestReconstructionPipeline:
             on_progress: Callback(percentage: int)
             on_log: Callback(message: str)
             on_frame: Callback(frame_index: int) - Called when a frame is processed
+            is_cancelled: Callback() -> bool - Check if processing should stop
             camera: 'left', 'right', or 'both'
             frame_interval: Process every N-th frame (1 = all frames)
             start_frame: Start index (inclusive)
@@ -231,6 +279,12 @@ class QuestReconstructionPipeline:
         total_processing = len(processing_frames)
         
         for i, frame in enumerate(processing_frames):
+            # Check for cancellation
+            if is_cancelled and is_cancelled():
+                if on_log:
+                    on_log("Reconstruction CANCELLED by user.")
+                return None
+                
             # Calculate actual global frame index for UI preview
             current_real_index = start_frame + i * frame_interval
             
@@ -244,11 +298,12 @@ class QuestReconstructionPipeline:
             if on_log and i % max(1, total_processing // 20) == 0:
                 on_log(f"Processing frame set {i+1}/{total_processing}...")
             
-            # Identify Head Pose
-            head_pose = self.build_pose_matrix(
+            # Identify Head Pose from Unity coordinates
+            unity_head_pose = self.build_pose_matrix(
                 frame['pose']['position'],
                 frame['pose']['rotation']
             )
+            # DO NOT convert head pose yet. We need to combine it with Unity-space camera offset first.
             
             # Process each camera
             for cam in cameras_to_process:
@@ -266,17 +321,22 @@ class QuestReconstructionPipeline:
                         failed_count += 1
                         continue
                         
-                    # Calculate Camera World Pose
-                    # T_cam_world = T_head_world @ T_head_to_cam
-                    T_head_cam = extrinsics_map[cam]
-                    cam_pose = head_pose @ T_head_cam
+                    # Combine Head Pose + Camera Extrinsics
+                    # Both are in Unity Frame (Left Handed, Y-Up)
+                    # T_cam_world = T_head_world @ T_cam_head
+                    
+                    camera_extrinsics_unity = extrinsics_map[cam]
+                    unity_camera_pose = unity_head_pose @ camera_extrinsics_unity
+                    
+                    # NOW convert to Open3D frame
+                    final_pose = self.convert_pose_unity_to_open3d(unity_camera_pose)
                     
                     # Integrate
                     self.reconstructor.integrate_frame(
                         rgb, 
                         depth, 
                         intrinsics_map[cam], 
-                        cam_pose
+                        final_pose
                     )
                     processed_count += 1
                     
@@ -304,12 +364,19 @@ class QuestReconstructionPipeline:
                 save_mesh = export_config.get("save_mesh", True)
                 
                 if save_mesh:
-                    output_path = self.project_dir / f"reconstruction.{fmt}"
+                    # Create Export directory
+                    export_dir = self.project_dir / "Export"
+                    export_dir.mkdir(exist_ok=True)
+                    
+                    # Generate timestamped filename
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    output_path = export_dir / f"reconstruction_{timestamp}.{fmt}"
+                    
                     on_log(f"Saving mesh to {output_path}...")
                     try:
                         # Open3D supports .ply, .obj, .glb, .gltf natively
                         o3d.io.write_triangle_mesh(str(output_path), mesh)
-                        on_log(f"✓ Saved successfully.")
+                        on_log(f"✓ Saved successfully: {output_path.name}")
                         
                         # Generate Thumbnail
                         try:
@@ -319,8 +386,15 @@ class QuestReconstructionPipeline:
                             vis.add_geometry(mesh)
                             vis.poll_events()
                             vis.update_renderer()
-                            thumb_path = self.project_dir / "thumbnail.png"
+                            # Save thumbnail in Export folder too
+                            thumb_path = export_dir / f"thumbnail_{timestamp}.png"
                             vis.capture_screen_image(str(thumb_path), do_render=True)
+                            
+                            # Also update the 'latest' thumbnail for GUI preview
+                            latest_thumb = self.project_dir / "thumbnail.png"
+                            import shutil
+                            shutil.copy2(str(thumb_path), str(latest_thumb))
+                            
                             vis.destroy_window()
                             on_log(f"✓ Thumbnail saved: {thumb_path.name}")
                         except Exception as e:

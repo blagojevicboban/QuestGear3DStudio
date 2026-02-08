@@ -2,7 +2,7 @@
   <img src="assets/banner2.png" width="800" alt="QuestStream 3D Banner">
 </p>
 
-# <p align="center">🥽 QuestStream 3D Processor</p>
+# <p align="center">🥽 QuestGear 3D Studio</p>
 
 <p align="center">
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+"></a>
@@ -11,7 +11,7 @@
   <a href="http://www.open3d.org/"><img src="https://img.shields.io/badge/Engine-Open3D-green.svg" alt="Engine: Open3D"></a>
 </p>
 
-**QuestStream** is a premium tool for high-quality 3D scene reconstruction directly from data captured via **Meta Quest 3** headsets. Using advanced volumetric integration (TSDF), QuestStream converts raw YUV images and depth maps into detailed, textured 3D models.
+**QuestGear 3D Studio** is a premium tool for high-quality 3D scene reconstruction directly from data captured via **Meta Quest 3** headsets (using **QuestGear 3D Scan**). Using advanced volumetric integration (TSDF), QuestGear converts raw YUV images and depth maps into detailed, textured 3D models.
 
 ---
 
@@ -27,10 +27,11 @@
 - 👓 **Stereo Reconstruction**: Utilize both Quest cameras for denser, more complete models.
 - 🎬 **Smart Cropping & Live View**: Preview video before processing and watch real-time progress.
 - 🧹 **Mesh Post-Processing**: Built-in smoothing and decimation tools for clean, optimized models.
-- 💾 **Multi-Format Export**: Save results as **.OBJ**, **.GLB** (Web/AR ready), or **.PLY**.
-- 🔍 **Real-time Monitoring**: RAM usage tracking and reconstruction thumbnails directly in the app.
+- 💾 **Safe Storage**: Models are saved to a dedicated `Export` folder with persistent, timestamped naming.
+- 🔍 **Robust Monitoring**: Accurate RAM usage tracking and high-quality reconstruction thumbnails.
+- 🛑 **Full Control**: Native **Stop** buttons for both ZIP extraction and 3D reconstruction processes.
 - 📐 **Customizable Layout**: Resizable panels to adjust the workspace to your preference.
-- 🖼️ **Interactive Visualizer**: External model inspection with support for rotation, zoom, and shading changes.
+- 🖼️ **Interactive Visualizer**: Focused 3D window for external model inspection with rotation, zoom, and shading support.
 
 ---
 

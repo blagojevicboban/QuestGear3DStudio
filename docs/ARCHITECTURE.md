@@ -1,4 +1,4 @@
-# QuestStream Project Architecture
+# QuestGear 3D Studio - Architecture
 
 This document describes the technical design and data flow within the application.
 

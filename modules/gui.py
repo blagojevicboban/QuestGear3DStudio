@@ -65,6 +65,7 @@ class ReconstructionThread(threading.Thread):
                 ),
                 on_log=self.on_log,
                 on_frame=self.on_frame,
+                is_cancelled=lambda: not self._is_running, # Pass cancellation check
                 camera=self.config_manager.get("reconstruction.camera", "left"),
                 frame_interval=int(self.config_manager.get("reconstruction.frame_interval", 5)),
                 start_frame=self.start_frame,
@@ -72,13 +73,12 @@ class ReconstructionThread(threading.Thread):
             )
             
             if result and result.get('mesh'):
-                mesh = result['mesh']
                 if self.on_log:
                     self.on_log(f"✓ Reconstruction complete!")
-                    if hasattr(mesh, 'vertices'):
-                        self.on_log(f"  Vertices: {len(mesh.vertices)}")
+                    if hasattr(result['mesh'], 'vertices'):
+                        self.on_log(f"  Vertices: {len(result['mesh'].vertices)}")
                 if self.on_finished:
-                    self.on_finished(mesh)
+                    self.on_finished(result) # Pass full result dict
             else:
                 if self.on_error:
                     self.on_error("Reconstruction failed - no mesh generated")
@@ -94,7 +94,7 @@ class ReconstructionThread(threading.Thread):
         self._is_running = False
 
 def main(page: ft.Page):
-    page.title = "QuestStream 3D Processor"
+    page.title = "QuestGear 3D Studio"
     page.theme_mode = ft.ThemeMode.DARK
     page.window_width = 1024
     page.window_height = 768
@@ -105,6 +105,8 @@ def main(page: ft.Page):
     temp_dir = None
     current_mesh = None
     frames_data = [] # List of frame objects
+    current_extractor = None # Tracking for cancellation
+    pending_zip_path = None # For confirmation dialog
     
     # Controls
     status_text = ft.Text("Ready")
@@ -196,6 +198,35 @@ def main(page: ft.Page):
 
     btn_process = ft.ElevatedButton("Start Reconstruction", disabled=True)
     btn_visualize = ft.ElevatedButton("Visualizer (External)", disabled=True)
+    
+    # Selection buttons (declared here as variables so they can be disabled)
+    btn_load_zip = ft.ElevatedButton("Load ZIP", icon=ft.Icons.UPLOAD_FILE, on_click=lambda _: file_picker.pick_files(
+        dialog_title="Open Quest Capture ZIP",
+        allowed_extensions=["zip"],
+        initial_directory="D:\\METAQUEST" if os.path.exists("D:\\METAQUEST") else None
+    ))
+    btn_load_folder = ft.ElevatedButton("Load Folder", icon=ft.Icons.FOLDER_OPEN, on_click=lambda _: folder_picker.get_directory_path(
+        dialog_title="Open Extracted Quest Data Folder",
+        initial_directory="D:\\METAQUEST" if os.path.exists("D:\\METAQUEST") else None
+    ))
+    
+    def stop_zip_extraction(e):
+        nonlocal current_extractor
+        if current_extractor:
+            add_log("STOP signal sent to extractor...")
+            current_extractor.stop()
+            btn_stop_zip.visible = False
+            status_text.value = "Stopping..."
+            page.update()
+
+    btn_stop_zip = ft.ElevatedButton(
+        "Stop", 
+        icon=ft.Icons.STOP, 
+        visible=False, 
+        on_click=stop_zip_extraction,
+        bgcolor=ft.Colors.RED_700,
+        color=ft.Colors.WHITE
+    )
 
     def add_log(msg):
         now = datetime.now().strftime("%H:%M:%S")
@@ -205,20 +236,34 @@ def main(page: ft.Page):
         page.update()
 
     def get_memory_usage():
-        """Get current memory usage in MB."""
-        import os, subprocess
+        """Get current memory usage in MB using a more robust Windows approach."""
+        import os, subprocess, re
         try:
-            # efficient windows approach
             pid = os.getpid()
-            cmd = f'tasklist /FI "PID eq {pid}" /FO CSV /NH'
-            output = subprocess.check_output(cmd, shell=True).decode()
-            # Parse CSV: "python.exe","55892","Console","1","56,789 K"
-            parts = output.split('","')
-            if len(parts) > 4:
-                mem_str = parts[4].replace('"', '').replace(' K', '').replace(',', '')
-                return int(mem_str) / 1024.0
+            # use wmic for cleaner numeric output if possible, or stick to tasklist with better regex
+            cmd = f'tasklist /FI "PID eq {pid}" /NH /FO CSV'
+            output = subprocess.check_output(cmd, shell=True).decode(errors='ignore')
+            
+            # Regex to find the memory value which is usually the last field like "123,456 K" or "123.456 K"
+            matches = re.findall(r'"([^"]+)"', output)
+            if len(matches) >= 5:
+                mem_str = matches[4] # The 5th field is Mem Usage
+                # Remove anything that isn't a digit (handles commas, dots, spaces, and 'K')
+                digits_only = re.sub(r'[^\d]', '', mem_str)
+                if digits_only:
+                    return int(digits_only) / 1024.0
+            
+            # Fallback to a simpler tasklist output if CSV fails
+            cmd_alt = f'tasklist /FI "PID eq {pid}" /NH'
+            output_alt = subprocess.check_output(cmd_alt, shell=True).decode(errors='ignore')
+            # Look for a number followed by ' K'
+            match = re.search(r'(\d[\d,.\s]*)\s*K', output_alt)
+            if match:
+                digits_only = re.sub(r'[^\d]', '', match.group(1))
+                return int(digits_only) / 1024.0
         except:
-            return 0.0
+            pass
+        return 0.0
             
     # Memory Monitor
     mem_text = ft.Text("RAM: -- MB", size=12, color=ft.Colors.GREY_400)
@@ -272,9 +317,13 @@ def main(page: ft.Page):
         page.update()
 
     def on_img_load_finished(path):
-        nonlocal temp_dir
+        nonlocal temp_dir, current_extractor
         temp_dir = path
+        current_extractor = None
         progress_bar.visible = False
+        btn_stop_zip.visible = False
+        btn_load_zip.disabled = False
+        btn_load_folder.disabled = False
         status_text.value = f"Extracted to {path}"
         add_log(f"Extraction complete: {path}")
         
@@ -299,45 +348,186 @@ def main(page: ft.Page):
         show_msg("Data loaded successfully.")
 
     def on_img_load_error(err):
+        nonlocal current_extractor
+        current_extractor = None
         progress_bar.visible = False
-        status_text.value = "Extraction Failed"
-        add_log(f"Extraction Error: {err}")
-        show_msg(f"Error: {err}")
+        btn_stop_zip.visible = False
+        btn_load_zip.disabled = False
+        btn_load_folder.disabled = False
+        
+        if err == "Stopped":
+            status_text.value = "Ready"
+            add_log("Extraction safely stopped and cleaned up.")
+        else:
+            status_text.value = "Extraction Failed"
+            add_log(f"Extraction Error: {err}")
+            show_msg(f"Error: {err}")
+            
+        page.update()
+
+    def execute_extraction(file_path):
+        nonlocal current_extractor
+        status_text.value = "Extracting..."
+        progress_bar.visible = True
+        progress_bar.value = None
+        btn_stop_zip.visible = True
+        page.update()
+        
+        current_extractor = AsyncExtractor(
+            file_path,
+            on_progress=on_img_load_progress,
+            on_finished=on_img_load_finished,
+            on_error=on_img_load_error,
+            on_log=add_log
+        )
+        current_extractor.start()
 
     def load_zip_result(e):
+        nonlocal pending_zip_path
         if e.files and len(e.files) > 0:
             file_path = e.files[0].path
             log_list.controls.clear()
             add_log(f"Selected file: {file_path}")
             
+            # Check if extracted folder already exists
+            zip_dir = os.path.dirname(file_path)
+            zip_name = os.path.splitext(os.path.basename(file_path))[0]
+            target_extracted_dir = os.path.join(zip_dir, f"{zip_name}_extracted")
+            
+            if os.path.exists(target_extracted_dir):
+                pending_zip_path = file_path
+                overwrite_msg.value = f"Folder '{os.path.basename(target_extracted_dir)}' already exists.\nDo you want to overwrite it?"
+                page.open(confirm_dialog)
+                return
+
             status_text.value = "Validating ZIP structure..."
+            btn_load_zip.disabled = True
+            btn_load_folder.disabled = True
             page.update()
             
             add_log("Starting ZIP validation...")
             valid, msg = ZipValidator.validate(file_path, log_callback=add_log)
             if not valid:
                 status_text.value = "Invalid ZIP"
+                btn_load_zip.disabled = False
+                btn_load_folder.disabled = False
                 show_msg(f"Invalid ZIP: {msg}")
                 add_log(f"Validation FAILED: {msg}")
                 return
 
-            status_text.value = "Extracting..."
-            progress_bar.visible = True
-            progress_bar.value = None
+            execute_extraction(file_path)
+
+    def handle_confirm_overwrite(e):
+        nonlocal pending_zip_path
+        page.close(confirm_dialog)
+        if pending_zip_path:
+            # Re-run the validation and extraction logic
+            status_text.value = "Validating ZIP structure..."
+            btn_load_zip.disabled = True
+            btn_load_folder.disabled = True
             page.update()
             
-            extractor = AsyncExtractor(
-                file_path,
-                on_progress=on_img_load_progress,
-                on_finished=on_img_load_finished,
-                on_error=on_img_load_error,
-                on_log=add_log
-            )
-            extractor.start()
+            add_log("Starting ZIP validation (after confirmation)...")
+            valid, msg = ZipValidator.validate(pending_zip_path, log_callback=add_log)
+            if not valid:
+                status_text.value = "Invalid ZIP"
+                btn_load_zip.disabled = False
+                btn_load_folder.disabled = False
+                show_msg(f"Invalid ZIP: {msg}")
+                return
+                
+            execute_extraction(pending_zip_path)
+            pending_zip_path = None
+
+    def handle_cancel_overwrite(e):
+        nonlocal pending_zip_path
+        pending_zip_path = None
+        page.close(confirm_dialog)
+        status_text.value = "Extraction cancelled"
+        page.update()
+
+    # --- Dialogs and Pickers ---
+    
+    format_dropdown_start = ft.Dropdown(
+        label="Select Export Format",
+        value=config_manager.get("export.format", "obj"),
+        options=[
+            ft.dropdown.Option("ply", "PLY (Point Cloud/Mesh)"),
+            ft.dropdown.Option("obj", "OBJ (Standard Mesh)"),
+            ft.dropdown.Option("glb", "GLB (Binary GLTF)"),
+        ],
+        width=300
+    )
+
+    def confirm_start_reconstruction(e):
+        nonlocal thread
+        page.close(reconstruct_format_dialog)
+        
+        # Save selected format to config for the pipeline to pick up
+        config_manager.set("export.format", format_dropdown_start.value)
+        
+        if not temp_dir:
+            return
+        
+        btn_process.disabled = True
+        btn_load_zip.disabled = True
+        btn_load_folder.disabled = True
+        btn_stop_reconstruct.visible = True
+        frame_range_slider.disabled = True # Disable slider during processing
+        status_text.value = f"Initializing ({format_dropdown_start.value.upper()})..."
+        progress_bar.visible = True
+        progress_bar.value = 0
+        page.update()
+        
+        # Get frame range
+        start_frame = int(frame_range_slider.start_value) if frame_range_slider.visible else 0
+        end_frame = int(frame_range_slider.end_value) if frame_range_slider.visible else None
+        
+        thread = ReconstructionThread(
+            temp_dir,
+            config_manager,
+            on_progress=on_reconstruct_progress,
+            on_status=lambda s: (setattr(status_text, "value", s) or page.update()),
+            on_log=add_log,
+            on_finished=on_reconstruct_finished,
+            on_error=on_reconstruct_error,
+            on_frame=update_frame_preview, # Live preview!
+            start_frame=start_frame,
+            end_frame=end_frame
+        )
+        thread.start()
+
+    reconstruct_format_dialog = ft.AlertDialog(
+        modal=True,
+        title=ft.Text("Reconstruction Format"),
+        content=ft.Column([
+            ft.Text("Choose the output format for the 3D model:"),
+            format_dropdown_start
+        ], tight=True, height=100),
+        actions=[
+            ft.TextButton("Start", on_click=confirm_start_reconstruction),
+            ft.TextButton("Cancel", on_click=lambda _: page.close(reconstruct_format_dialog)),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+
+    overwrite_msg = ft.Text("")
+    confirm_dialog = ft.AlertDialog(
+        modal=True,
+        title=ft.Text("Folder Exists"),
+        content=overwrite_msg,
+        actions=[
+            ft.TextButton("Yes, Overwrite", on_click=handle_confirm_overwrite),
+            ft.TextButton("No, Cancel", on_click=handle_cancel_overwrite),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
 
     file_picker = ft.FilePicker()
     file_picker.on_result = load_zip_result
     page.overlay.append(file_picker)
+    page.overlay.append(confirm_dialog) # Register dialog
+    page.overlay.append(reconstruct_format_dialog) # Register format dialog
 
     def load_folder_result(e: ft.FilePickerResultEvent):
         if e.path:
@@ -382,20 +572,67 @@ def main(page: ft.Page):
     folder_picker.on_result = load_folder_result
     page.overlay.append(folder_picker)
 
+    def stop_reconstruction(e):
+        nonlocal thread
+        if thread:
+            add_log("STOP signal sent to reconstruction...")
+            thread.stop()
+            status_text.value = "Stopping reconstruction..."
+            btn_stop_reconstruct.visible = False
+            page.update()
+
+    btn_stop_reconstruct = ft.ElevatedButton(
+        "Stop", 
+        icon=ft.Icons.STOP, 
+        visible=False,
+        bgcolor=ft.Colors.RED_700,
+        color=ft.Colors.WHITE,
+        on_click=stop_reconstruction
+    )
+    
+    # Placeholder for thread reference to allow cancellation from button
+    thread = None
+
     def on_reconstruct_progress(val):
         progress_bar.value = val
         page.update()
 
     thumb_img = ft.Image(src="", width=320, height=240, fit=ft.ImageFit.CONTAIN, visible=False)
     
-    def on_reconstruct_finished(mesh):
+    def on_reconstruct_finished(result):
         nonlocal current_mesh
-        current_mesh = mesh
+        current_mesh = result.get('mesh')
+        mesh = current_mesh
+        
+        # Get actual exported filename and path from result
+        full_path = result.get('output_path')
+        if full_path:
+            filename = os.path.basename(full_path)
+        else:
+            fmt = config_manager.get("export.format", "obj")
+            filename = f"reconstruction.{fmt}"
+            full_path = os.path.join(temp_dir, filename) if temp_dir else filename
+        
         status_text.value = "Reconstruction Complete"
         btn_process.disabled = False
         btn_visualize.disabled = False
+        btn_load_zip.disabled = False
+        btn_load_folder.disabled = False
+        btn_stop_reconstruct.visible = False
         frame_range_slider.disabled = False # Re-enable slider
-        add_log(f"Reconstruction finished with {len(mesh.vertices)} vertices.")
+        
+        add_log(f"✓ Reconstruction finished: {len(mesh.vertices)} vertices.")
+        
+        # Verify file and update title/logs
+        if full_path and os.path.exists(full_path):
+            add_log(f"✓ File saved: {filename}")
+            add_log(f"  Path: {full_path}")
+            page.title = f"QuestGear 3D Studio - {filename}"
+            show_msg(f"Success! Model saved to:\n{full_path}")
+        else:
+            add_log(f"⚠ Mesh extracted but file {filename} not found in {temp_dir}")
+            page.title = "QuestGear 3D Studio"
+            
         progress_bar.visible = False
         
         # Check for thumbnail
@@ -409,42 +646,20 @@ def main(page: ft.Page):
         page.update()
 
     def on_reconstruct_error(err):
-        status_text.value = "Reconstruction Failed"
+        status_text.value = "Data Loaded" if temp_dir else "Ready"
         btn_process.disabled = False
+        btn_visualize.disabled = current_mesh is None
+        btn_load_zip.disabled = False
+        btn_load_folder.disabled = False
+        btn_stop_reconstruct.visible = False
         frame_range_slider.disabled = False # Re-enable slider
-        add_log(f"Reconstruction Error: {err}")
+        add_log(f"Reconstruction Info: {err}")
         progress_bar.visible = False
-        show_msg(f"Error: {err}")
         page.update()
 
     def start_reconstruction(e):
-        if not temp_dir:
-            return
-        
-        btn_process.disabled = True
-        frame_range_slider.disabled = True # Disable slider during processing
-        status_text.value = "Initializing..."
-        progress_bar.visible = True
-        progress_bar.value = 0
-        page.update()
-        
-        # Get frame range
-        start_frame = int(frame_range_slider.start_value) if frame_range_slider.visible else 0
-        end_frame = int(frame_range_slider.end_value) if frame_range_slider.visible else None
-        
-        thread = ReconstructionThread(
-            temp_dir,
-            config_manager,
-            on_progress=on_reconstruct_progress,
-            on_status=lambda s: (setattr(status_text, "value", s) or page.update()),
-            on_log=add_log,
-            on_finished=on_reconstruct_finished,
-            on_error=on_reconstruct_error,
-            on_frame=update_frame_preview, # Live preview!
-            start_frame=start_frame,
-            end_frame=end_frame
-        )
-        thread.start()
+        # This now just opens the format selection dialog
+        page.open(reconstruct_format_dialog)
 
     btn_process.on_click = start_reconstruction
 
@@ -454,7 +669,23 @@ def main(page: ft.Page):
             return
             
         if current_mesh and hasattr(current_mesh, 'vertices') and len(current_mesh.vertices) > 0:
-            o3d.visualization.draw_geometries([current_mesh], window_name="QuestStream Result")
+            try:
+                add_log("Opening 3D Visualizer...")
+                vis = o3d.visualization.Visualizer()
+                vis.create_window(window_name="QuestStream Result", width=1024, height=768)
+                vis.add_geometry(current_mesh)
+                
+                # Setup render options for better visibility
+                opt = vis.get_render_option()
+                opt.background_color = np.asarray([0.1, 0.1, 0.1])
+                opt.point_size = 2.0
+                
+                vis.run() # This blocks until window is closed
+                vis.destroy_window()
+                add_log("Visualizer closed.")
+            except Exception as ex:
+                add_log(f"Visualizer Error: {ex}")
+                show_msg(f"Visualizer Error: {ex}")
         else:
             show_msg("No mesh to visualize.")
 
@@ -543,19 +774,13 @@ def main(page: ft.Page):
 
     main_layout = ft.Column([
         ft.Row([
-            ft.ElevatedButton("Load ZIP", icon=ft.Icons.UPLOAD_FILE, on_click=lambda _: file_picker.pick_files(
-                dialog_title="Open Quest Capture ZIP",
-                allowed_extensions=["zip"],
-                initial_directory="D:\\METAQUEST" if os.path.exists("D:\\METAQUEST") else None
-            )),
-            ft.ElevatedButton("Load Folder", icon=ft.Icons.FOLDER_OPEN, on_click=lambda _: folder_picker.get_directory_path(
-                dialog_title="Open Extracted Quest Data Folder",
-                initial_directory="D:\\METAQUEST" if os.path.exists("D:\\METAQUEST") else None
-            )),
+            btn_load_zip,
+            btn_load_folder,
+            btn_stop_zip,
             btn_process,
+            btn_stop_reconstruct,
             btn_visualize,
             ft.Container(content=mem_text, padding=10)
-        ]),
         ]),
         video_container := ft.Container(
             content=ft.Column([
