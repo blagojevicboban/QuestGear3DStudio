@@ -25,9 +25,11 @@
   - **Depth Optimization**: Filtering noise, Infinity/NaN values, and precise depth scaling.
 - 🌐 **Scalable VoxelBlockGrid**: Efficient sparse volume reconstruction for large scenes.
 - 👓 **Stereo Reconstruction**: Utilize both Quest cameras for denser, more complete models.
+- 🎬 **Smart Cropping**: Preview and select the exact video segment to reconstruct.
 - 🧹 **Mesh Post-Processing**: Built-in smoothing and decimation tools for clean, optimized models.
 - 💾 **Multi-Format Export**: Save results as **.OBJ**, **.GLB** (Web/AR ready), or **.PLY**.
 - 🔍 **Real-time Monitoring**: RAM usage tracking and reconstruction thumbnails directly in the app.
+- 📐 **Customizable Layout**: Resizable panels to adjust the workspace to your preference.
 - 🖼️ **Interactive Visualizer**: External model inspection with support for rotation, zoom, and shading changes.
 
 ---

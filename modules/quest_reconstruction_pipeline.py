@@ -173,7 +173,9 @@ class QuestReconstructionPipeline:
         on_progress=None, 
         on_log=None,
         camera='left',
-        frame_interval=1
+        frame_interval=1,
+        start_frame=0,
+        end_frame=None
     ):
         """
         Run the reconstruction process.
@@ -183,6 +185,8 @@ class QuestReconstructionPipeline:
             on_log: Callback(message: str)
             camera: 'left', 'right', or 'both'
             frame_interval: Process every N-th frame (1 = all frames)
+            start_frame: Start index (inclusive)
+            end_frame: End index (inclusive)
             
         Returns:
             Dictionary with reconstruction results
@@ -192,8 +196,16 @@ class QuestReconstructionPipeline:
                 on_log("ERROR: Open3D not available. Cannot run reconstruction.")
             return None
         
+        total_frames = len(self.frames)
+        if end_frame is None or end_frame >= total_frames:
+            end_frame = total_frames - 1
+            
+        # Slice frames based on range
+        # Note: end_frame is inclusive from UI, so using +1 for slice
+        frames_subset = self.frames[start_frame : end_frame + 1]
+        
         if on_log:
-            on_log(f"Starting reconstruction with {len(self.frames)} frames...")
+            on_log(f"Starting reconstruction with {len(frames_subset)} frames (Range: {start_frame}-{end_frame})...")
             on_log(f"Using camera mode: {camera}")
             on_log(f"Frame interval: {frame_interval}")
             
@@ -213,13 +225,16 @@ class QuestReconstructionPipeline:
         processed_count = 0
         failed_count = 0
         
-        for i, frame in enumerate(self.frames[::frame_interval]):
+        processing_frames = frames_subset[::frame_interval]
+        total_processing = len(processing_frames)
+        
+        for i, frame in enumerate(processing_frames):
             if on_progress:
-                progress = int((i + 1) / len(self.frames[::frame_interval]) * 100)
+                progress = int((i + 1) / total_processing * 100)
                 on_progress(progress)
             
-            if on_log and i % max(1, len(self.frames) // 20) == 0:
-                on_log(f"Processing frame set {i+1}/{len(self.frames[::frame_interval])}...")
+            if on_log and i % max(1, total_processing // 20) == 0:
+                on_log(f"Processing frame set {i+1}/{total_processing}...")
             
             # Identify Head Pose
             head_pose = self.build_pose_matrix(

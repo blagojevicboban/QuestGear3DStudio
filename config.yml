@@ -1,9 +1,12 @@
 export:
-  format: ply
+  format: glb
   save_mesh: true
   save_pointcloud: false
 ingestion:
   validation_checksum: true
+post_processing:
+  decimation_target_triangles: 100000
+  smoothing_iterations: 5
 reconstruction:
   block_count: 50000
   block_resolution: 16

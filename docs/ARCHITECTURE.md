@@ -10,7 +10,8 @@ The application is divided into a UI layer and a logic layer (backend) that comm
 - Uses **Flet** for interface rendering.
 - Manages application state (paths to temporary folders, loaded meshes).
 - Launches asynchronous processes in background threads to keep the UI responsive.
-- Contains the `add_log` function which centralizes the output of all operations.
+- **Splitter Control**: Implements a custom `GestureDetector` to allow resizing of the video preview pane.
+- Contains the `add_log` function which centralizes the output of operations.
 
 ### Ingestion Layer (`modules/ingestion.py`)
 - **ZipValidator**: Checks if the ZIP file has a correct structure (presence of `frames.json` and required folders).

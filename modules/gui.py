@@ -18,17 +18,20 @@ except ImportError:
     HAS_OPEN3D = False
     o3d = None
 
+import cv2
+import base64
 from .config_manager import ConfigManager
 from .ingestion import ZipValidator, AsyncExtractor
 from .reconstruction import QuestReconstructor
 from .image_processing import yuv_to_rgb, filter_depth
+from .quest_image_processor import QuestImageProcessor
 
 class ReconstructionThread(threading.Thread):
     """
     Worker thread that handles the 3D reconstruction process for Quest data.
     Uses QuestReconstructionPipeline to process YUV images and raw depth.
     """
-    def __init__(self, data_dir, config_manager, on_progress=None, on_status=None, on_log=None, on_finished=None, on_error=None):
+    def __init__(self, data_dir, config_manager, on_progress=None, on_status=None, on_log=None, on_finished=None, on_error=None, start_frame=0, end_frame=None):
         super().__init__()
         self.data_dir = data_dir
         self.config_manager = config_manager
@@ -37,6 +40,8 @@ class ReconstructionThread(threading.Thread):
         self.on_log = on_log
         self.on_finished = on_finished
         self.on_error = on_error
+        self.start_frame = start_frame
+        self.end_frame = end_frame
         self._is_running = True
 
     def run(self):
@@ -59,7 +64,9 @@ class ReconstructionThread(threading.Thread):
                 ),
                 on_log=self.on_log,
                 camera=self.config_manager.get("reconstruction.camera", "left"),
-                frame_interval=int(self.config_manager.get("reconstruction.frame_interval", 5))
+                frame_interval=int(self.config_manager.get("reconstruction.frame_interval", 5)),
+                start_frame=self.start_frame,
+                end_frame=self.end_frame
             )
             
             if result and result.get('mesh'):
@@ -95,12 +102,96 @@ def main(page: ft.Page):
     # State
     temp_dir = None
     current_mesh = None
+    frames_data = [] # List of frame objects
     
     # Controls
     status_text = ft.Text("Ready")
     progress_bar = ft.ProgressBar(value=0, visible=False)
     log_list = ft.ListView(expand=True, spacing=2, auto_scroll=True)
     
+    # Frame Selection Controls
+    preview_img = ft.Image(src_base64="", fit=ft.ImageFit.CONTAIN, visible=False, expand=True)
+    frame_range_slider = ft.RangeSlider(
+        min=0, max=100, 
+        start_value=0, end_value=100,
+        label="{value}",
+        visible=False,
+        disabled=True
+    )
+    frame_range_label = ft.Text("Frame Range: -", visible=False)
+    
+    # Splitter Handling
+    video_section_height = 300
+    
+    def on_splitter_drag(e: ft.DragUpdateEvent):
+        nonlocal video_section_height
+        video_section_height += e.delta_y
+        # Clamp height
+        if video_section_height < 150: video_section_height = 150
+        if video_section_height > 600: video_section_height = 600
+        
+        video_container.height = video_section_height
+        page.update()
+
+    splitter = ft.GestureDetector(
+        on_vertical_drag_update=on_splitter_drag,
+        mouse_cursor=ft.MouseCursor.RESIZE_UP_DOWN,
+        content=ft.Container(
+            bgcolor=ft.Colors.GREY_800,
+            height=12,
+            content=ft.Icon(ft.Icons.DRAG_HANDLE, size=10, color=ft.Colors.GREY_400),
+            alignment=ft.alignment.center,
+            border_radius=4,
+            tooltip="Drag to resize"
+        )
+    )
+
+    def update_frame_preview(index):
+        if not frames_data or index < 0 or index >= len(frames_data):
+            return
+            
+        try:
+            # Load frame using QuestImageProcessor
+            frame_info = frames_data[index]
+            camera = config_manager.get("reconstruction.camera", "left")
+            if camera == 'both': camera = 'left' # Preview left for stereo
+            
+            rgb, _ = QuestImageProcessor.process_quest_frame(
+                temp_dir, frame_info, camera=camera
+            )
+            
+            if rgb is not None:
+                # Convert to base64 for Flet
+                is_success, buffer = cv2.imencode(".jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+                if is_success:
+                    b64_img = base64.b64encode(buffer).decode("utf-8")
+                    preview_img.src_base64 = b64_img
+                    preview_img.update()
+        except Exception as e:
+            print(f"Preview error: {e}")
+
+    last_range_start = -1
+    last_range_end = -1
+
+    def on_range_change(e):
+        nonlocal last_range_start, last_range_end
+        start = int(e.control.start_value)
+        end = int(e.control.end_value)
+        
+        frame_range_label.value = f"Frame Range: {start} - {end} (Total: {end - start + 1})"
+        frame_range_label.update()
+        
+        # Determine which handle moved to update preview
+        if abs(start - last_range_start) > 0:
+            update_frame_preview(start)
+        elif abs(end - last_range_end) > 0:
+            update_frame_preview(end)
+            
+        last_range_start = start
+        last_range_end = end
+
+    frame_range_slider.on_change = on_range_change
+
     btn_process = ft.ElevatedButton("Start Reconstruction", disabled=True)
     btn_visualize = ft.ElevatedButton("Visualizer (External)", disabled=True)
 
@@ -145,6 +236,35 @@ def main(page: ft.Page):
         page.snack_bar.open = True
         page.update()
 
+    def load_frames_ui(frames_json_path):
+        nonlocal frames_data
+        try:
+            with open(frames_json_path, 'r') as f:
+                data = json.load(f)
+                frames_data = data.get('frames', [])
+                
+                if frames_data:
+                    count = len(frames_data)
+                    frame_range_slider.min = 0
+                    frame_range_slider.max = count - 1
+                    frame_range_slider.start_value = 0
+                    frame_range_slider.end_value = count - 1
+                    frame_range_slider.divisions = count
+                    frame_range_slider.visible = True
+                    frame_range_slider.disabled = False
+                    
+                    frame_range_label.value = f"Frame Range: 0 - {count-1} (Total: {count})"
+                    frame_range_label.visible = True
+                    
+                    preview_img.visible = True
+                    
+                    # Initial Preview
+                    update_frame_preview(0)
+                    
+                    add_log(f"Loaded {count} frames.")
+        except Exception as e:
+            add_log(f"Error loading frames info: {e}")
+
     def on_img_load_progress(val):
         progress_bar.value = val / 100.0
         page.update()
@@ -169,6 +289,9 @@ def main(page: ft.Page):
                 add_log(f"ERROR converting Quest data: {str(e)}")
                 show_msg(f"Failed to convert Quest data: {str(e)}")
                 return
+        
+        # Load frames.json for preview
+        load_frames_ui(frames_json)
         
         btn_process.disabled = False
         show_msg("Data loaded successfully.")
@@ -245,6 +368,10 @@ def main(page: ft.Page):
                     return
             
             status_text.value = f"Loaded folder: {folder_path}"
+            
+            # Load frames UI
+            load_frames_ui(frames_json)
+            
             btn_process.disabled = False
             page.update()
             show_msg("Folder loaded successfully.")
@@ -295,6 +422,10 @@ def main(page: ft.Page):
         progress_bar.value = 0
         page.update()
         
+        # Get frame range
+        start_frame = int(frame_range_slider.start_value) if frame_range_slider.visible else 0
+        end_frame = int(frame_range_slider.end_value) if frame_range_slider.visible else None
+        
         thread = ReconstructionThread(
             temp_dir,
             config_manager,
@@ -302,7 +433,9 @@ def main(page: ft.Page):
             on_status=lambda s: (setattr(status_text, "value", s) or page.update()),
             on_log=add_log,
             on_finished=on_reconstruct_finished,
-            on_error=on_reconstruct_error
+            on_error=on_reconstruct_error,
+            start_frame=start_frame,
+            end_frame=end_frame
         )
         thread.start()
 
@@ -416,6 +549,21 @@ def main(page: ft.Page):
             btn_visualize,
             ft.Container(content=mem_text, padding=10)
         ]),
+        ]),
+        video_container := ft.Container(
+            content=ft.Column([
+                ft.Text("Video Track & Cropping:", weight="bold"),
+                preview_img,
+                frame_range_slider,
+                frame_range_label
+            ]),
+            padding=10,
+            bgcolor="#252525",
+            border_radius=10,
+            height=300, # Initial height
+            animate_size=None # Disable animation for smooth dragging
+        ),
+        splitter,
         progress_bar,
         progress_bar,
         status_text,
