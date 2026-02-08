@@ -172,6 +172,7 @@ class QuestReconstructionPipeline:
         self, 
         on_progress=None, 
         on_log=None,
+        on_frame=None,
         camera='left',
         frame_interval=1,
         start_frame=0,
@@ -183,6 +184,7 @@ class QuestReconstructionPipeline:
         Args:
             on_progress: Callback(percentage: int)
             on_log: Callback(message: str)
+            on_frame: Callback(frame_index: int) - Called when a frame is processed
             camera: 'left', 'right', or 'both'
             frame_interval: Process every N-th frame (1 = all frames)
             start_frame: Start index (inclusive)
@@ -229,6 +231,12 @@ class QuestReconstructionPipeline:
         total_processing = len(processing_frames)
         
         for i, frame in enumerate(processing_frames):
+            # Calculate actual global frame index for UI preview
+            current_real_index = start_frame + i * frame_interval
+            
+            if on_frame:
+                on_frame(current_real_index)
+
             if on_progress:
                 progress = int((i + 1) / total_processing * 100)
                 on_progress(progress)

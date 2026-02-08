@@ -31,7 +31,7 @@ class ReconstructionThread(threading.Thread):
     Worker thread that handles the 3D reconstruction process for Quest data.
     Uses QuestReconstructionPipeline to process YUV images and raw depth.
     """
-    def __init__(self, data_dir, config_manager, on_progress=None, on_status=None, on_log=None, on_finished=None, on_error=None, start_frame=0, end_frame=None):
+    def __init__(self, data_dir, config_manager, on_progress=None, on_status=None, on_log=None, on_finished=None, on_error=None, on_frame=None, start_frame=0, end_frame=None):
         super().__init__()
         self.data_dir = data_dir
         self.config_manager = config_manager
@@ -40,6 +40,7 @@ class ReconstructionThread(threading.Thread):
         self.on_log = on_log
         self.on_finished = on_finished
         self.on_error = on_error
+        self.on_frame = on_frame
         self.start_frame = start_frame
         self.end_frame = end_frame
         self._is_running = True
@@ -63,6 +64,7 @@ class ReconstructionThread(threading.Thread):
                     self.on_status(f"Processing: {p}%") if self.on_status else None
                 ),
                 on_log=self.on_log,
+                on_frame=self.on_frame,
                 camera=self.config_manager.get("reconstruction.camera", "left"),
                 frame_interval=int(self.config_manager.get("reconstruction.frame_interval", 5)),
                 start_frame=self.start_frame,
@@ -392,6 +394,7 @@ def main(page: ft.Page):
         status_text.value = "Reconstruction Complete"
         btn_process.disabled = False
         btn_visualize.disabled = False
+        frame_range_slider.disabled = False # Re-enable slider
         add_log(f"Reconstruction finished with {len(mesh.vertices)} vertices.")
         progress_bar.visible = False
         
@@ -408,15 +411,18 @@ def main(page: ft.Page):
     def on_reconstruct_error(err):
         status_text.value = "Reconstruction Failed"
         btn_process.disabled = False
+        frame_range_slider.disabled = False # Re-enable slider
         add_log(f"Reconstruction Error: {err}")
         progress_bar.visible = False
         show_msg(f"Error: {err}")
+        page.update()
 
     def start_reconstruction(e):
         if not temp_dir:
             return
         
         btn_process.disabled = True
+        frame_range_slider.disabled = True # Disable slider during processing
         status_text.value = "Initializing..."
         progress_bar.visible = True
         progress_bar.value = 0
@@ -434,6 +440,7 @@ def main(page: ft.Page):
             on_log=add_log,
             on_finished=on_reconstruct_finished,
             on_error=on_reconstruct_error,
+            on_frame=update_frame_preview, # Live preview!
             start_frame=start_frame,
             end_frame=end_frame
         )
