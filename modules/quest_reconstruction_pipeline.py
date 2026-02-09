@@ -9,6 +9,9 @@ from datetime import datetime
 from .quest_image_processor import QuestImageProcessor
 from .reconstruction import QuestReconstructor, HAS_OPEN3D, o3d
 from .config_manager import ConfigManager
+from .quest_reconstruction_utils import (
+    Transforms, CoordinateSystem, compute_depth_camera_params, convert_depth_to_linear
+)
 
 
 class QuestReconstructionPipeline:
@@ -37,24 +40,40 @@ class QuestReconstructionPipeline:
         self.frames = self.data.get('frames', [])
         self.camera_metadata = self.data.get('camera_metadata', {})
         
-    def get_camera_intrinsics(self, camera='left'):
+    def get_camera_intrinsics(self, camera='left', depth_info=None):
         """
-        Extract camera intrinsics from metadata.
+        Extract camera intrinsics from metadata or use updated info.
+        
+        Args:
+            camera: 'left' or 'right'
+            depth_info: Optional dict with 'fov_...' tangents and 'width'/'height'
         
         Returns:
             3x3 intrinsics matrix
         """
-        cam_data = self.camera_metadata.get(camera, {})
+        fx, fy, cx, cy = 0, 0, 0, 0
+
+        if depth_info:
+            # Use accurate intrinsics from frame metadata
+            w = depth_info.get('width', 0)
+            h = depth_info.get('height', 0)
+            l = depth_info.get('fov_left', 0)
+            r = depth_info.get('fov_right', 0)
+            t = depth_info.get('fov_top', 0)
+            b = depth_info.get('fov_down', 0)
+            
+            if w > 0 and h > 0:
+                fx, fy, cx, cy = compute_depth_camera_params(l, r, t, b, w, h)
         
-        # Try to parse intrinsics from Quest metadata
-        # The intrinsics are in a nested object: camera_metadata.left.intrinsics
-        intrinsics_obj = cam_data.get('intrinsics', {})
-        
-        # Read from nested intrinsics or use defaults
-        fx = intrinsics_obj.get('fx', 867.0)
-        fy = intrinsics_obj.get('fy', 867.0)
-        cx = intrinsics_obj.get('cx', 640.0)
-        cy = intrinsics_obj.get('cy', 640.0)
+        if fx == 0:
+            # Fallback to global metadata or defaults
+            cam_data = self.camera_metadata.get(camera, {})
+            intrinsics_obj = cam_data.get('intrinsics', {})
+            
+            fx = intrinsics_obj.get('fx', 867.0)
+            fy = intrinsics_obj.get('fy', 867.0)
+            cx = intrinsics_obj.get('cx', 640.0)
+            cy = intrinsics_obj.get('cy', 640.0)
         
         intrinsics = np.array([
             [fx, 0, cx],
@@ -64,152 +83,47 @@ class QuestReconstructionPipeline:
         
         return intrinsics
     
-    def quaternion_to_matrix(self, quat):
-        """
-        Convert quaternion (w, x, y, z) to 3x3 rotation matrix.
-        
-        Args:
-            quat: [w, x, y, z] quaternion
-            
-        Returns:
-            3x3 rotation matrix
-        """
-        w, x, y, z = quat
-        
-        R = np.array([
-            [1 - 2*y**2 - 2*z**2, 2*x*y - 2*w*z, 2*x*z + 2*w*y],
-            [2*x*y + 2*w*z, 1 - 2*x**2 - 2*z**2, 2*y*z - 2*w*x],
-            [2*x*z - 2*w*y, 2*y*z + 2*w*x, 1 - 2*x**2 - 2*y**2]
-        ])
-        
-        return R
-    
-    def build_pose_matrix(self, position, rotation):
-        """
-        Build 4x4 pose matrix from position and quaternion.
-        
-        Args:
-            position: [x, y, z]
-            rotation: [w, x, y, z] quaternion
-            
-        Returns:
-            4x4 pose matrix (camera to world)
-        """
-        R = self.quaternion_to_matrix(rotation)
-        t = np.array(position).reshape(3, 1)
-        
-        pose = np.eye(4)
-        pose[:3, :3] = R
-        pose[:3, 3] = t.flatten()
-        
-        return pose
-
-    def convert_pose_unity_to_open3d(self, pose):
-        """
-        Convert Unity (Left-Handed, Y-Up) pose to Open3D (Right-Handed, Y-Down).
-        Transformation:
-        1. Flip Z axis (Left-Handed -> Right-Handed check).
-        2. Rotate 180 degrees around X axis (Y-Up -> Y-Down).
-        Effective Transformation: Scale(1, -1, -1) applied to the pose.
-        
-        Args:
-            pose: 4x4 homogenous matrix (Unity coordinates)
-            
-        Returns:
-            4x4 homogenous matrix (Open3D coordinates)
-        """
-        # Create scaling matrix S = diag(1, -1, -1, 1)
-        # This mirrors Y and Z axes.
-        # Why?
-        # Unity: +Y Up, +Z Forward (Left Handed)
-        # Open3D Camera: -Y Up, -Z Forward (Right Handed)
-        # So we flip Y and Z.
-        S = np.eye(4)
-        S[1, 1] = -1
-        S[2, 2] = -1
-        
-        # Apply transformation: P_new = S * P_old * S
-        # Pre-multiply by S flips the world axes.
-        # Post-multiply by S flips the local camera axes.
-        # We need to transform the camera pose itself.
-        
-        # Actually, simpler model:
-        # Just negate Z position? No, that mirrors the world.
-        # Just negate Z axis of rotation? That changes handedness.
-        
-        # Let's use the standard conversion logic:
-        # Open3D = S @ Unity @ S
-        return S @ pose @ S
-    
-    def run_reconstruction(
-        self, 
-        on_progress=None, 
-        on_log=None,
-        camera='left',
-        frame_interval=1
-    ):
-        """
-        Run the reconstruction process.
-        
-        Args:
-            on_progress: Callback(percentage: int)
-            on_log: Callback(message: str)
-            camera: Which camera to use ('left' or 'right')
-            frame_interval: Process every N-th frame (1 = all frames)
-            
-        Returns:
-            Dictionary with reconstruction results
-        """
-        if not self.reconstructor:
-            if on_log:
-                on_log("ERROR: Open3D not available. Cannot run reconstruction.")
-            return None
-        
-        if on_log:
-            on_log(f"Starting reconstruction with {len(self.frames)} frames...")
-            on_log(f"Using camera: {camera}")
-            on_log(f"Frame interval: {frame_interval}")
-        
-        
     def get_camera_extrinsics(self, camera='left'):
         """
-        Get 4x4 homogenous matrix for Head-to-Camera transform.
-        Computes T_camera_head (Camera relative to Head).
+        Get 4x4 homogenous matrix for Head-to-Camera transform (Unity Coordinates).
         """
         cam_data = self.camera_metadata.get(camera, {})
         
         # Translation
-        # Default approximate offsets if missing
         offset_x = -0.032 if camera == 'left' else 0.032
         translation = cam_data.get('translation', [offset_x, 0, 0])
         t = np.array(translation)
         
         # Rotation
-        # Quest 3 cameras are canted. We must apply this rotation.
-        # Format: [w, x, y, z] or [x, y, z, w]?
-        # quest_adapter.py reads: floats for rot_w, rot_x...
-        # metadata json: usually [w, x, y, z] or [x, y, z, w]
-        # Let's check a sample or assume standard Quest [x, y, z, w] or similar?
-        # quest_adapter used row['rot_w'] etc for poses.
-        # For metadata, it's a list. 
-        # Usually Unity JSON is [x, y, z, w].
-        # But let's check input list length/order.
-        # Standard convention in this pipeline seems to be [w, x, y, z] from build_pose_matrix.
-        
-        rotation = cam_data.get('rotation', None) # Check keys: 'rotation' or 'rotation_quat'?
+        rotation = cam_data.get('rotation', None)
         if rotation is None:
-             rotation = cam_data.get('rotation_quat', [1, 0, 0, 0]) # Default Identity w=1
+             rotation = cam_data.get('rotation_quat', [0, 0, 0, 1]) # Default Identity
              
-        # Ensure rotation is [w, x, y, z]
-        # If it's 3 elements, it's Euler. If 4, Quat.
-        if len(rotation) == 4:
-            # Assume [w, x, y, z] based on build_pose_matrix usage
-            R = self.quaternion_to_matrix(rotation)
-        else:
-            R = np.eye(3)
-            
+        # Create Transforms object for easy matrix conversion
+        # We treat this as a "pose" in Unity space relative to head
+        # This is a bit of a hack to use Transforms for a single local offset, 
+        # but it ensures consistent quaternion handling.
+        
+        # Note: input rotation order in metadata might need verification.
+        # Assuming [x, y, z, w] or similar. Utils expects [x, y, z, w].
+        # If input is [w, x, y, z], we need to swap.
+        # Reference project uses `create_pose_rotation_x` etc columns.
+        # Here we assume standard Unity JSON which is usually [x, y, z, w].
+        
+        clean_rot = np.array(rotation)
+        if len(clean_rot) == 4:
+            # Check if likely [w, x, y, z] (w is often close to 1 for small rotations)
+            # But Unity default is [x, y, z, w].
+            pass
+
+        # Since we are just building a local matrix in Unity space, let's use scipy directly
+        # to avoid confusion with the coordinate system enum which controls AXIS flips.
+        from scipy.spatial.transform import Rotation as R
+        r = R.from_quat(clean_rot)
+        mat = r.as_matrix()
+        
         H = np.eye(4)
-        H[:3, :3] = R
+        H[:3, :3] = mat
         H[:3, 3] = t
         
         return H
@@ -219,7 +133,7 @@ class QuestReconstructionPipeline:
         on_progress=None, 
         on_log=None,
         on_frame=None,
-        is_cancelled=None, # New parameter
+        is_cancelled=None,
         camera='left',
         frame_interval=1,
         start_frame=0,
@@ -227,19 +141,6 @@ class QuestReconstructionPipeline:
     ):
         """
         Run the reconstruction process.
-        
-        Args:
-            on_progress: Callback(percentage: int)
-            on_log: Callback(message: str)
-            on_frame: Callback(frame_index: int) - Called when a frame is processed
-            is_cancelled: Callback() -> bool - Check if processing should stop
-            camera: 'left', 'right', or 'both'
-            frame_interval: Process every N-th frame (1 = all frames)
-            start_frame: Start index (inclusive)
-            end_frame: End index (inclusive)
-            
-        Returns:
-            Dictionary with reconstruction results
         """
         if not self.reconstructor:
             if on_log:
@@ -250,28 +151,17 @@ class QuestReconstructionPipeline:
         if end_frame is None or end_frame >= total_frames:
             end_frame = total_frames - 1
             
-        # Slice frames based on range
-        # Note: end_frame is inclusive from UI, so using +1 for slice
         frames_subset = self.frames[start_frame : end_frame + 1]
         
         if on_log:
             on_log(f"Starting reconstruction with {len(frames_subset)} frames (Range: {start_frame}-{end_frame})...")
             on_log(f"Using camera mode: {camera}")
-            on_log(f"Frame interval: {frame_interval}")
             
         cameras_to_process = ['left', 'right'] if camera == 'both' else [camera]
         
-        intrinsics_map = {cam: self.get_camera_intrinsics(cam) for cam in cameras_to_process}
-        extrinsics_map = {cam: self.get_camera_extrinsics(cam) for cam in cameras_to_process}
+        # Pre-calculate extrinsics (Head-to-Camera) in Unity space
+        extrinsics_map_unity = {cam: self.get_camera_extrinsics(cam) for cam in cameras_to_process}
         
-        if on_log:
-            for cam in cameras_to_process:
-                ints = intrinsics_map[cam]
-                on_log(f"[{cam}] Intrinsics: fx={ints[0,0]:.1f}, cx={ints[0,2]:.1f}")
-                exts = extrinsics_map[cam][:3, 3]
-                on_log(f"[{cam}] Extrinsics Offset: {exts}")
-        
-        # Process frames
         processed_count = 0
         failed_count = 0
         
@@ -279,135 +169,147 @@ class QuestReconstructionPipeline:
         total_processing = len(processing_frames)
         
         for i, frame in enumerate(processing_frames):
-            # Check for cancellation
             if is_cancelled and is_cancelled():
-                if on_log:
-                    on_log("Reconstruction CANCELLED by user.")
+                if on_log: on_log("Reconstruction CANCELLED by user.")
                 return None
                 
-            # Calculate actual global frame index for UI preview
             current_real_index = start_frame + i * frame_interval
             
-            if on_frame:
-                on_frame(current_real_index)
-
-            if on_progress:
-                progress = int((i + 1) / total_processing * 100)
-                on_progress(progress)
-            
+            if on_frame: on_frame(current_real_index)
+            if on_progress: on_progress(int((i + 1) / total_processing * 100))
             if on_log and i % max(1, total_processing // 20) == 0:
                 on_log(f"Processing frame set {i+1}/{total_processing}...")
             
-            # Identify Head Pose from Unity coordinates
-            unity_head_pose = self.build_pose_matrix(
-                frame['pose']['position'],
-                frame['pose']['rotation']
-            )
-            # DO NOT convert head pose yet. We need to combine it with Unity-space camera offset first.
+            # Get Head Pose (Unity World)
+            # frame['pose']['position'] -> [x, y, z]
+            # frame['pose']['rotation'] -> [x, y, z, w] ideally
+            head_pos = np.array(frame['pose']['position'])
+            head_rot = np.array(frame['pose']['rotation'])
             
-            # Process each camera
+            # Construct Head Matrix (Unity)
+            from scipy.spatial.transform import Rotation as R
+            head_R = R.from_quat(head_rot).as_matrix()
+            head_T = np.eye(4)
+            head_T[:3, :3] = head_R
+            head_T[:3, 3] = head_pos
+            
             for cam in cameras_to_process:
                 try:
-                    rgb, depth = QuestImageProcessor.process_quest_frame(
+                    rgb, depth, depth_info = QuestImageProcessor.process_quest_frame(
                         str(self.project_dir),
                         frame,
                         camera=cam
                     )
                     
                     if rgb is None or depth is None:
-                        # Only check logging for failures if single camera mode or significant failure
-                        if on_log and failed_count < 5: 
-                            on_log(f"⚠ [{cam}] Frame {i} failed: RGB={rgb is not None}, Depth={depth is not None}")
                         failed_count += 1
                         continue
+                     
+                    # 1. Get accurate intrinsics
+                    intrinsics = self.get_camera_intrinsics(cam, depth_info)
+                    
+                    # 2. Linearize depth
+                    if depth_info:
+                        near = depth_info.get('near_z', 0.1)
+                        far = depth_info.get('far_z', 3.0)
+                        depth_linear = convert_depth_to_linear(depth, near, far)
+                    else:
+                        # Fallback: assume depth is already linear or use defaults
+                        # If raw depth was loaded as float32, it's likely non-linear NDC-like if from Quest?
+                        # Or it might be meters. Existing code assumed meters.
+                        # Let's assume meters to be safe for legacy support.
+                        depth_linear = depth
                         
-                    # Combine Head Pose + Camera Extrinsics
-                    # Both are in Unity Frame (Left Handed, Y-Up)
+                    # 3. Compute Camera Pose in Unity World
                     # T_cam_world = T_head_world @ T_cam_head
+                    unity_camera_pose = head_T @ extrinsics_map_unity[cam]
                     
-                    camera_extrinsics_unity = extrinsics_map[cam]
-                    unity_camera_pose = unity_head_pose @ camera_extrinsics_unity
+                    # 4. Convert to Open3D Coordinate System
+                    # Create Transforms object with this single pose
+                    # Extract translation and rotation from the combined matrix
+                    cam_pos_unity = unity_camera_pose[:3, 3]
+                    cam_rot_unity = R.from_matrix(unity_camera_pose[:3, :3]).as_quat()
                     
-                    # NOW convert to Open3D frame
-                    final_pose = self.convert_pose_unity_to_open3d(unity_camera_pose)
+                    unity_transform = Transforms(
+                        coordinate_system=CoordinateSystem.UNITY,
+                        positions=np.array([cam_pos_unity]),
+                        rotations=np.array([cam_rot_unity]) # [x, y, z, w]
+                    )
                     
+                    open3d_transform = unity_transform.convert_coordinate_system(CoordinateSystem.OPEN3D)
+                    
+                    # Get Camera-to-World matrix in Open3D space
+                    # indexing [0] because we wrapped in array
+                    final_pose_open3d = open3d_transform.extrinsics_cw[0]
+                    # Integation Debug Check
+                    if i < 20 or (i % 10 == 0):
+                         # Check for invalid values
+                         t_min, t_max = np.min(depth_linear), np.max(depth_linear)
+                         p_trans = final_pose_open3d[:3, 3]
+                         msg = f"DEBUG Frame {i}: Depth[{t_min:.3f}, {t_max:.3f}] PoseT{p_trans} FX={intrinsics[0,0]:.1f}"
+                         if on_log: on_log(msg)
+                         print(msg) # Print to stdout for terminal capture
+                         
+                         if np.any(np.isnan(final_pose_open3d)) or np.any(np.isinf(final_pose_open3d)):
+                             err_msg = f"ERROR: Invalid Pose detected in frame {i}!"
+                             if on_log: on_log(err_msg)
+                             print(err_msg)
+                             continue
+
                     # Integrate
                     self.reconstructor.integrate_frame(
                         rgb, 
-                        depth, 
-                        intrinsics_map[cam], 
-                        final_pose
+                        depth_linear, 
+                        intrinsics, 
+                        final_pose_open3d
                     )
                     processed_count += 1
                     
                 except Exception as e:
-                    if on_log and failed_count < 10:
-                        on_log(f"Error processing {cam} frame {i}: {str(e)[:100]}")
+                    if on_log and failed_count < 5:
+                        on_log(f"Error processing {cam} frame {i}: {str(e)}")
                     failed_count += 1
         
         if on_log:
-            on_log(f"Integration complete!")
-            on_log(f"  Processed: {processed_count} frames")
-            on_log(f"  Failed: {failed_count} frames")
+            on_log(f"Integration complete! Processed: {processed_count}, Failed: {failed_count}")
             on_log("Extracting mesh...")
         
-        # Extract mesh
         mesh = self.reconstructor.extract_mesh()
         
+        output_path = None
         if on_log:
             if hasattr(mesh, 'vertices'):
                 on_log(f"✓ Mesh extracted: {len(mesh.vertices)} vertices")
                 
-                # Save Mesh
                 export_config = self.config.get("export") if self.config else {}
                 fmt = export_config.get("format", "obj")
-                save_mesh = export_config.get("save_mesh", True)
                 
-                if save_mesh:
-                    # Create Export directory
+                if export_config.get("save_mesh", True):
                     export_dir = self.project_dir / "Export"
                     export_dir.mkdir(exist_ok=True)
-                    
-                    # Generate timestamped filename
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     output_path = export_dir / f"reconstruction_{timestamp}.{fmt}"
                     
                     on_log(f"Saving mesh to {output_path}...")
                     try:
-                        # Open3D supports .ply, .obj, .glb, .gltf natively
-                        success = o3d.io.write_triangle_mesh(str(output_path), mesh)
+                        o3d.io.write_triangle_mesh(str(output_path), mesh)
+                        on_log(f"✓ Saved successfully")
                         
-                        if success and output_path.exists():
-                            on_log(f"✓ Saved successfully: {output_path.name}")
-                            # Keep output_path defined for return
-                        else:
-                            on_log(f"ERROR: failed to write mesh to {output_path}")
-                            # Remove output_path from locals() logic by ensuring it's not set if failed
-                            # Actually, easier to use a dedicated variable for success
-                            pass
-                        
-                        # Generate Thumbnail
+                        # Thumbnail
                         try:
-                            on_log("Generating thumbnail...")
                             vis = o3d.visualization.Visualizer()
                             vis.create_window(visible=False, width=640, height=480)
                             vis.add_geometry(mesh)
                             vis.poll_events()
                             vis.update_renderer()
-                            # Save thumbnail in Export folder too
                             thumb_path = export_dir / f"thumbnail_{timestamp}.png"
                             vis.capture_screen_image(str(thumb_path), do_render=True)
-                            
-                            # Also update the 'latest' thumbnail for GUI preview
                             latest_thumb = self.project_dir / "thumbnail.png"
                             import shutil
                             shutil.copy2(str(thumb_path), str(latest_thumb))
-                            
                             vis.destroy_window()
-                            on_log(f"✓ Thumbnail saved: {thumb_path.name}")
-                        except Exception as e:
-                            on_log(f"⚠ Thumbnail generation failed: {e}")
-                            
+                        except: pass
+                        
                     except Exception as e:
                         on_log(f"ERROR saving mesh: {e}")
             else:
@@ -417,7 +319,7 @@ class QuestReconstructionPipeline:
             'mesh': mesh,
             'processed_frames': processed_count,
             'failed_frames': failed_count,
-            'output_path': str(output_path) if 'output_path' in locals() and output_path.exists() else None
+            'output_path': str(output_path) if output_path and output_path.exists() else None
         }
 
 
@@ -440,7 +342,7 @@ class AsyncQuestReconstruction(Thread):
                 on_progress=self.on_progress,
                 on_log=self.on_log,
                 camera='left',
-                frame_interval=5  # Process every 5th frame for speed
+                frame_interval=5  # Default interval
             )
             
             if self.on_finished:

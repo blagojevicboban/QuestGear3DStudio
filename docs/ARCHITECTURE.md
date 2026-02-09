@@ -17,15 +17,15 @@ The application is divided into a UI layer and a logic layer (backend) that comm
 - **ZipValidator**: Checks if the ZIP file has a correct structure (presence of `frames.json` and required folders).
 - **AsyncExtractor**: Inherits from `threading.Thread`. Extracts the ZIP into a system temporary folder (`tempfile`).
 
-### Processing Layer (`modules/image_processing.py`)
-- Implements low-level image transformations.
-- **yuv_to_rgb**: Conversion from NV12/NV21 format (standard for Quest) to RGB using OpenCV.
-- **filter_depth**: Application of a bilateral filter to depth maps for noise reduction before integration.
+### Processing Layer (`modules/quest_image_processor.py`, `modules/quest_reconstruction_utils.py`)
+- **YUV to RGB**: Conversion from NV12/NV21 format to RGB.
+- **Transforms**: `Classes` and `Enums` for converting **Unity (LH, Y-up)** poses to **Open3D (RH, Y-down)**.
+- **Depth**: Safe `convert_depth_to_linear` with localized clamping and NaN handling.
+- **Intrinsics**: Dynamic calculation of focal length and principal point from FOV angles.
 
 ### Reconstruction Layer (`modules/reconstruction.py`)
-- Central part of the backend using **Open3D Tensor API**.
-- **QuestReconstructor**: Initializes `VoxelBlockGrid` on GPU (CUDA) if available, falling back to CPU.
-- **Integration**: Converts numerical data into Tensor images and integrates them into the sparse volume.
+- **QuestReconstructor**: Initializes `VoxelBlockGrid`. Supports both CPU and GPU (CUDA).
+- **Integration**: Converts numerical arrays (RGB, Linear Depth) into Open3D Tensors and integrates safe, verified data.
 
 ## 2. Data Flow
 

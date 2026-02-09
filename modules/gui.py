@@ -160,7 +160,7 @@ def main(page: ft.Page):
             camera = config_manager.get("reconstruction.camera", "left")
             if camera == 'both': camera = 'left' # Preview left for stereo
             
-            rgb, _ = QuestImageProcessor.process_quest_frame(
+            rgb, _, _ = QuestImageProcessor.process_quest_frame(
                 temp_dir, frame_info, camera=camera
             )
             

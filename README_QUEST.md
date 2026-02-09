@@ -27,10 +27,11 @@
 - **Raw Depth**: Depth maps are loaded as `float32` values from `.raw` files. Since Quest 3 generates depth in meters, we perform scaling and cleanup of invalid values (Infinity/NaN).
 
 ### 2. Geometric Integration (TSDF)
-We use **Scalable TSDF Volume** (from the Open3D library) which works as follows:
-- Each RGB-D frame is projected into 3D space using **intrinsics** parameters (focal length, principal point) and **pose** (headset position and rotation).
-- Data is accumulated into a volumetric grid (voxels).
-- Finally, the **Marching Cubes** algorithm is used to extract the final triangle mesh.
+We use **Scalable TSDF Volume** (from the Open3D library) with enhanced precision:
+- **Intrinsics**: Calculated per frame using exact FOV tangents (Top/Bottom/Left/Right) from Quest depth metadata.
+- **Pose Transformation**: Headset poses (Unity coordinate system: Left-Handed, Y-Up) are mathematically converted to Open3D space (Right-Handed, Y-Down).
+- **Depth Linearization**: Raw depth maps are safely clamped to valid ranges [0, 1] and converted to linear meters before integration.
+- **Algorithm**: Data is accumulated into a volumetric grid (voxels) and the **Marching Cubes** algorithm extracts the final triangle mesh.
 
 ---
 

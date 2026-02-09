@@ -66,6 +66,7 @@ python -m venv venv
 
 # Install dependencies
 pip install -r requirements.txt
+pip install scipy
 ```
 
 ### 🎮 Running
@@ -86,6 +87,7 @@ QuestStream/
 │   ├── reconstruction.py# TSDF Engine (Open3D)
 │   ├── quest_adapter.py # Quest data adaptation
 │   ├── quest_image_processor.py # YUV/Depth processing
+│   ├── quest_reconstruction_utils.py # Poses/Depth Utils
 │   └── config_manager.py# YAML Config loader
 └── README_QUEST.md    # Detailed instructions for Quest 3 pipeline
 ```

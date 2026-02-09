@@ -156,7 +156,7 @@ class QuestImageProcessor:
             # Load image format info
             format_json = project_path / f"{camera}_camera_image_format.json"
             if not format_json.exists():
-                return None, None
+                return None, None, None
             
             format_info = QuestImageProcessor.load_image_format_info(format_json)
             
@@ -167,18 +167,18 @@ class QuestImageProcessor:
             # Load YUV and convert to RGB
             yuv_path = project_path / frame_info['cameras'][camera]['image']
             if not yuv_path.exists():
-                return None, None
+                return None, None, None
             
             rgb_image = QuestImageProcessor.yuv420_to_rgb(str(yuv_path), width, height)
             
             # Load depth map
             depth_path_rel = frame_info['cameras'][camera].get('depth')
             if not depth_path_rel:
-                return rgb_image, None
+                return rgb_image, None, None
             
             depth_path = project_path / depth_path_rel
             if not depth_path.exists():
-                return rgb_image, None
+                return rgb_image, None, None
             
             # Load depth descriptor to get dimensions
             depth_descriptor_csv = project_path / f"{camera}_depth_descriptors.csv"
@@ -205,7 +205,7 @@ class QuestImageProcessor:
             if depth_map.shape != (height, width):
                 depth_map = cv2.resize(depth_map, (width, height), interpolation=cv2.INTER_NEAREST)
             
-            return rgb_image, depth_map
+            return rgb_image, depth_map, depth_info
             
         except Exception as e:
             import traceback
@@ -213,4 +213,4 @@ class QuestImageProcessor:
             err_msg = f"Quest frame error: {e}\n{traceback.format_exc()}"
             print(err_msg)
             sys.stderr.write(err_msg)
-            return None, None
+            return None, None, None
