@@ -91,36 +91,41 @@ class QuestReconstructionPipeline:
         
         # Translation
         offset_x = -0.032 if camera == 'left' else 0.032
-        translation = cam_data.get('translation', [offset_x, 0, 0])
+        translation = list(cam_data.get('translation', [offset_x, 0, 0]))
+        
+        # Apply reference project logic: transl[2] *= -1
+        if len(translation) >= 3:
+            translation[2] *= -1
         t = np.array(translation)
         
         # Rotation
         rotation = cam_data.get('rotation', None)
         if rotation is None:
-             rotation = cam_data.get('rotation_quat', [0, 0, 0, 1]) # Default Identity
-             
-        # Create Transforms object for easy matrix conversion
-        # We treat this as a "pose" in Unity space relative to head
-        # This is a bit of a hack to use Transforms for a single local offset, 
-        # but it ensures consistent quaternion handling.
-        
-        # Note: input rotation order in metadata might need verification.
-        # Assuming [x, y, z, w] or similar. Utils expects [x, y, z, w].
-        # If input is [w, x, y, z], we need to swap.
-        # Reference project uses `create_pose_rotation_x` etc columns.
-        # Here we assume standard Unity JSON which is usually [x, y, z, w].
-        
-        clean_rot = np.array(rotation)
-        if len(clean_rot) == 4:
-            # Check if likely [w, x, y, z] (w is often close to 1 for small rotations)
-            # But Unity default is [x, y, z, w].
-            pass
+             rotation = cam_data.get('rotation_quat', [0, 0, 0, 1])
 
-        # Since we are just building a local matrix in Unity space, let's use scipy directly
-        # to avoid confusion with the coordinate system enum which controls AXIS flips.
-        from scipy.spatial.transform import Rotation as R
-        r = R.from_quat(clean_rot)
-        mat = r.as_matrix()
+        clean_rot = np.array(rotation)
+        
+        if len(clean_rot) >= 4:
+            # Match reference logic from image_data_io.py:
+            # qx = -rot_quat[0]
+            # qy = -rot_quat[1]
+            # qz = rot_quat[2]
+            # qw = rot_quat[3]
+            qx = -clean_rot[0]
+            qy = -clean_rot[1]
+            qz = clean_rot[2]
+            qw = clean_rot[3]
+            
+            from scipy.spatial.transform import Rotation as R
+            rot = R.from_quat((qx, qy, qz, qw)).inv()
+            
+            # Apply 180-degree rotation to align Android camera pose with HMD world
+            # rot *= R.from_euler('x', np.pi)
+            rot = rot * R.from_euler('x', np.pi)
+            
+            mat = rot.as_matrix()
+        else:
+            mat = np.eye(3)
         
         H = np.eye(4)
         H[:3, :3] = mat
@@ -236,25 +241,36 @@ class QuestReconstructionPipeline:
                         rotations=np.array([cam_rot_unity]) # [x, y, z, w]
                     )
                     
-                    open3d_transform = unity_transform.convert_coordinate_system(CoordinateSystem.OPEN3D)
+                    open3d_transform = unity_transform.convert_coordinate_system(
+                        CoordinateSystem.OPEN3D, 
+                        is_camera=True # <--- CRITICAL FIX: Treat as camera to apply correct Basis change
+                    )
                     
                     # Get Camera-to-World matrix in Open3D space
                     # indexing [0] because we wrapped in array
                     final_pose_open3d = open3d_transform.extrinsics_cw[0]
                     # Integation Debug Check
                     if i < 20 or (i % 10 == 0):
-                         # Check for invalid values
                          t_min, t_max = np.min(depth_linear), np.max(depth_linear)
                          p_trans = final_pose_open3d[:3, 3]
-                         msg = f"DEBUG Frame {i}: Depth[{t_min:.3f}, {t_max:.3f}] PoseT{p_trans} FX={intrinsics[0,0]:.1f}"
+                         curr_fx = intrinsics[0,0]
+                         msg = f"DEBUG Frame {i}: Depth[{t_min:.3f}, {t_max:.3f}] PoseT{p_trans} FX={curr_fx:.1f}"
                          if on_log: on_log(msg)
-                         print(msg) # Print to stdout for terminal capture
-                         
-                         if np.any(np.isnan(final_pose_open3d)) or np.any(np.isinf(final_pose_open3d)):
-                             err_msg = f"ERROR: Invalid Pose detected in frame {i}!"
-                             if on_log: on_log(err_msg)
-                             print(err_msg)
-                             continue
+                         print(msg) 
+                    
+                    # Safety Check: Skip frames where intrinsics are wildy different (e.g. uninitialized 144.4 vs expected ~800)
+                    curr_fx = intrinsics[0,0]
+                    if curr_fx < 400: 
+                        warn = f"WARNING: Skipping Frame {i} due to suspicious intrinsics (FX={curr_fx:.1f})"
+                        if on_log: on_log(warn)
+                        print(warn)
+                        continue
+
+                    if np.any(np.isnan(final_pose_open3d)) or np.any(np.isinf(final_pose_open3d)):
+                        err_msg = f"ERROR: Invalid Pose detected in frame {i}!"
+                        if on_log: on_log(err_msg)
+                        print(err_msg)
+                        continue
 
                     # Integrate
                     self.reconstructor.integrate_frame(
