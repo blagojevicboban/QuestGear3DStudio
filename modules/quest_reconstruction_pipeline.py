@@ -265,29 +265,22 @@ class QuestReconstructionPipeline:
                         # Let's assume meters to be safe for legacy support.
                         depth_linear = depth
                     
-                    # FIX 2a: Filter depth range for room scanning (remove noise)
-                    # TEMPORARILY DISABLED - too aggressive, removes all pixels
-                    # depth_linear[depth_linear < 0.2] = 0.0  # Too close (< 20cm)
-                    # depth_linear[depth_linear > 2.5] = 0.0  # Too far for small room (> 2.5m)
+                    # FIX 2a: Filter depth range to remove outliers
+                    # Adjusted range based on actual data: 0.1m - 5.0m (was too strict at 0.2-2.5m)
+                    depth_linear[depth_linear < 0.1] = 0.0   # Too close (< 10cm) - likely noise
+                    depth_linear[depth_linear > 5.0] = 0.0   # Too far (> 5m) - removes 30+m outliers
                     
-                    # DEBUG: Log depth distribution to see what values we have
+                    # DEBUG: Log depth distribution AFTER filtering
                     if i < 5:
                         valid_depth = depth_linear[depth_linear > 0]
                         if len(valid_depth) > 0:
                             d_min, d_max, d_mean = np.min(valid_depth), np.max(valid_depth), np.mean(valid_depth)
-                            msg = f"  Depth stats: min={d_min:.2f}m, max={d_max:.2f}m, mean={d_mean:.2f}m, pixels={len(valid_depth)}"
+                            msg = f"  Depth AFTER filter: min={d_min:.2f}m, max={d_max:.2f}m, mean={d_mean:.2f}m, pixels={len(valid_depth)}"
                             print(msg)
                             if on_log: on_log(msg)
                     
-                    # FIX 2b: Apply bilateral filtering for smoother depth
-                    # TEMPORARILY DISABLED - testing without filtering first
-                    # if depth_linear.max() > 0:
-                    #     depth_linear = cv2.bilateralFilter(
-                    #         depth_linear.astype(np.float32), 
-                    #         d=5, 
-                    #         sigmaColor=0.1, 
-                    #         sigmaSpace=0.1
-                    #     )
+                    # FIX 2b: Bilateral filtering DISABLED (too slow, removes valid data)
+                    # Reference project doesn't use it either
                         
                     # 3. Compute Camera Pose in Unity World
                     # T_cam_world = T_head_world @ T_cam_head

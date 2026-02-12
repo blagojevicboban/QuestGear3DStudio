@@ -47,7 +47,7 @@ class ReconstructionThread(threading.Thread):
 
     def run(self):
         try:
-            from modules.quest_reconstruction_pipeline import QuestReconstructionPipeline
+            from .quest_reconstruction_pipeline import QuestReconstructionPipeline
             
             if self.on_status:
                 self.on_status("Initializing Quest Reconstruction Pipeline...")
@@ -114,7 +114,7 @@ def main(page: ft.Page):
     log_list = ft.ListView(expand=True, spacing=2, auto_scroll=True)
     
     # Frame Selection Controls
-    preview_img = ft.Image(src_base64="", fit=ft.ImageFit.CONTAIN, visible=False, expand=True)
+    preview_img = ft.Image(fit=ft.ImageFit.CONTAIN, visible=False, expand=True)
     frame_range_slider = ft.RangeSlider(
         min=0, max=100, 
         start_value=0, end_value=100,
