@@ -80,10 +80,33 @@ class QuestReconstructor:
         if not self.vbg:
             return
 
-        # Prepare Tensors on device
-        # Depth is expected in uint16 or float32. 
-        # Since input is float meters, we can use it directly with depth_scale=1.0 or convert to uint16 mm.
-        # Tensor API integrate expects float depth usually.
+        # VALIDATION: Check if depth data is valid
+        if depth_image is None:
+            print("[QuestReconstructor] WARNING: Depth image is None, skipping frame")
+            return
+        
+        # Check if depth has any valid (non-zero, non-nan, non-inf) values
+        valid_depth_mask = np.isfinite(depth_image) & (depth_image > 0) & (depth_image < self.depth_max)
+        num_valid_pixels = np.sum(valid_depth_mask)
+        
+        if num_valid_pixels == 0:
+            print("[QuestReconstructor] WARNING: Depth image has no valid pixels, skipping frame")
+            return
+        
+        # Check if all depth values are identical (invalid/placeholder depth)
+        # This happens when Quest Environment Depth API fails to capture actual depth
+        unique_values = np.unique(depth_image[valid_depth_mask])
+        if len(unique_values) == 1:
+            print(f"[QuestReconstructor] WARNING: All depth pixels are identical ({unique_values[0]:.3f}m), skipping frame")
+            print("                      → Quest Depth API returned placeholder data (likely poor lighting/texture)")
+            return
+        
+        # If less than 1% valid pixels, warn but continue
+        total_pixels = depth_image.size
+        valid_ratio = num_valid_pixels / total_pixels
+        if valid_ratio < 0.01:
+            print(f"[QuestReconstructor] WARNING: Only {valid_ratio*100:.2f}% of depth pixels are valid")
+
         
         depth_tensor = o3d.t.geometry.Image(
             o3c.Tensor(depth_image.astype(np.float32), device=self.device)

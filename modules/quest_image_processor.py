@@ -140,72 +140,122 @@ class QuestImageProcessor:
     @staticmethod
     def process_quest_frame(project_dir, frame_info, camera='left'):
         """
-        Process a single Quest frame (YUV + depth).
+        Process a single Quest frame (YUV + depth or JPG + PNG).
+        Auto-detects format based on file extensions.
         
         Args:
             project_dir: Path to Quest project directory
             frame_info: Frame dictionary from frames.json
-            camera: 'left' or 'right'
+            camera: 'left', 'right', or 'center' (for new format)
             
         Returns:
-            Tuple of (rgb_image, depth_map) or (None, None) if failed
+            Tuple of (rgb_image, depth_map, depth_info) or (None, None, None) if failed
         """
         project_path = Path(project_dir)
         
         try:
-            # Load image format info
-            format_json = project_path / f"{camera}_camera_image_format.json"
-            if not format_json.exists():
+            # Check which camera format we're using
+            if camera not in frame_info.get('cameras', {}):
+                # If camera not found, try 'center' as fallback (new format)
+                if 'center' in frame_info.get('cameras', {}):
+                    camera = 'center'
+                else:
+                    return None, None, None
+            
+            camera_data = frame_info['cameras'][camera]
+            image_path_rel = camera_data.get('image', '')
+            
+            if not image_path_rel:
                 return None, None, None
             
-            format_info = QuestImageProcessor.load_image_format_info(format_json)
+            image_path = project_path / image_path_rel
             
-            # Get image dimensions from format info
-            width = format_info.get('width', 640)
-            height = format_info.get('height', 480)
-            
-            # Load YUV and convert to RGB
-            yuv_path = project_path / frame_info['cameras'][camera]['image']
-            if not yuv_path.exists():
+            if not image_path.exists():
                 return None, None, None
             
-            rgb_image = QuestImageProcessor.yuv420_to_rgb(str(yuv_path), width, height)
+            # Auto-detect image format by extension
+            image_ext = image_path.suffix.lower()
             
-            # Load depth map
-            depth_path_rel = frame_info['cameras'][camera].get('depth')
-            if not depth_path_rel:
+            # NEW FORMAT: JPG/PNG
+            if image_ext in ['.jpg', '.jpeg', '.png']:
+                rgb_image = cv2.imread(str(image_path))
+                if rgb_image is None:
+                    return None, None, None
+                
+                # OpenCV loads as BGR, convert to RGB
+                rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
+                
+                # Load depth if available (PNG 16-bit)
+                depth_path_rel = camera_data.get('depth')
+                if depth_path_rel:
+                    depth_path = project_path / depth_path_rel
+                    if depth_path.exists():
+                        depth_map = cv2.imread(str(depth_path), cv2.IMREAD_UNCHANGED)
+                        
+                        # Convert 16-bit to float if needed
+                        if depth_map is not None and depth_map.dtype == np.uint16:
+                            # Normalize to meters (assuming depth is in mm or similar)
+                            depth_map = depth_map.astype(np.float32) / 1000.0
+                        
+                        return rgb_image, depth_map, None
+                    
                 return rgb_image, None, None
             
-            depth_path = project_path / depth_path_rel
-            if not depth_path.exists():
-                return rgb_image, None, None
-            
-            # Load depth descriptor to get dimensions
-            depth_descriptor_csv = project_path / f"{camera}_depth_descriptors.csv"
-            timestamp = frame_info['timestamp']
-            
-            depth_info = None
-            if depth_descriptor_csv.exists():
-                depth_info = QuestImageProcessor.load_depth_descriptor(
-                    str(depth_descriptor_csv), 
-                    timestamp
+            # OLD FORMAT: YUV + RAW
+            elif image_ext == '.yuv':
+                # Load image format info
+                format_json = project_path / f"{camera}_camera_image_format.json"
+                if not format_json.exists():
+                    return None, None, None
+                
+                format_info = QuestImageProcessor.load_image_format_info(format_json)
+                
+                # Get image dimensions from format info
+                width = format_info.get('width', 640)
+                height = format_info.get('height', 480)
+                
+                # Load YUV and convert to RGB
+                rgb_image = QuestImageProcessor.yuv420_to_rgb(str(image_path), width, height)
+                
+                # Load depth map
+                depth_path_rel = camera_data.get('depth')
+                if not depth_path_rel:
+                    return rgb_image, None, None
+                
+                depth_path = project_path / depth_path_rel
+                if not depth_path.exists():
+                    return rgb_image, None, None
+                
+                # Load depth descriptor to get dimensions
+                depth_descriptor_csv = project_path / f"{camera}_depth_descriptors.csv"
+                timestamp = frame_info.get('timestamp', 0)
+                
+                depth_info = None
+                if depth_descriptor_csv.exists():
+                    depth_info = QuestImageProcessor.load_depth_descriptor(
+                        str(depth_descriptor_csv), 
+                        timestamp
+                    )
+                
+                # Use default dimensions if descriptor not found (Quest 3 default is 320x320)
+                depth_width = depth_info['width'] if depth_info else 320
+                depth_height = depth_info['height'] if depth_info else 320
+                
+                depth_map = QuestImageProcessor.load_raw_depth(
+                    str(depth_path), 
+                    depth_width, 
+                    depth_height
                 )
+                
+                # Resize depth to match RGB if needed
+                if depth_map.shape != (height, width):
+                    depth_map = cv2.resize(depth_map, (width, height), interpolation=cv2.INTER_NEAREST)
+                
+                return rgb_image, depth_map, depth_info
             
-            # Use default dimensions if descriptor not found (Quest 3 default is 320x320)
-            depth_width = depth_info['width'] if depth_info else 320
-            depth_height = depth_info['height'] if depth_info else 320
-            
-            depth_map = QuestImageProcessor.load_raw_depth(
-                str(depth_path), 
-                depth_width, 
-                depth_height
-            )
-            
-            # Resize depth to match RGB if needed
-            if depth_map.shape != (height, width):
-                depth_map = cv2.resize(depth_map, (width, height), interpolation=cv2.INTER_NEAREST)
-            
-            return rgb_image, depth_map, depth_info
+            else:
+                print(f"Unsupported image format: {image_ext}")
+                return None, None, None
             
         except Exception as e:
             import traceback

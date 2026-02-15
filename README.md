@@ -11,7 +11,11 @@
   <a href="http://www.open3d.org/"><img src="https://img.shields.io/badge/Engine-Open3D-green.svg" alt="Engine: Open3D"></a>
 </p>
 
-**QuestGear 3D Studio** is a premium tool for high-quality 3D scene reconstruction directly from data captured via **Meta Quest 3** headsets (using **QuestGear 3D Scan**). Using advanced volumetric integration (TSDF), QuestGear converts raw YUV images and depth maps into detailed, textured 3D models.
+**QuestGear 3D Studio** is a premium tool for high-quality 3D scene reconstruction directly from data captured via **Meta Quest 3** headsets (using **QuestGear 3D Scan** or legacy Quest Recording Manager). Using advanced volumetric integration (TSDF), QuestGear converts raw YUV/JPG images and depth maps into detailed, textured 3D models.
+
+**Supports both:**
+- ✅ **QuestGear 3D Scan** - Modern format (scan_data.json + transforms.json + JPG/PNG)
+- ✅ **Quest Recording Manager** - Legacy format (hmd_poses.csv + YUV/RAW)
 
 ---
 
