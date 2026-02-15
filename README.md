@@ -24,9 +24,11 @@
 - 🚀 **GPU Acceleration**: Built on **Open3D Tensor API**, utilizing CUDA for 10x-50x faster reconstruction.
 - ⚡ **Asynchronous Pipeline**: Fast data processing without freezing the interface.
 - 🎨 **Modern Deep UI**: Elegant interface built using the **Flet** platform with dynamic progress bars.
+- ⭐ **NerfStudio Integration**: Train Gaussian Splatting and NeRF models directly from GUI (color-only supported!)
 - 🛠️ **Advanced Processing**:
   - **YUV_420_888 Conversion**: Automatic conversion of Quest raw formats to RGB.
-  - **Depth Optimization**: Filtering noise, Infinity/NaN values, and precise depth scaling.
+  - **JPG/PNG Support**: Modern image formats with auto-detection
+  - **Depth Validation**: Smart detection of invalid/placeholder depth data
 - 🌐 **Scalable VoxelBlockGrid**: Efficient sparse volume reconstruction for large scenes.
 - 👓 **Stereo Reconstruction**: Utilize both Quest cameras for denser, more complete models.
 - 🎬 **Smart Cropping & Live View**: Preview video before processing and watch real-time progress.
@@ -46,6 +48,7 @@
 | **Language** | Python 3.11 |
 | **Frontend** | Flet (Flutter-based) |
 | **3D Engine** | Open3D |
+| **Neural Rendering** | NerfStudio (Gaussian Splatting, NeRF) |
 | **Computer Vision** | OpenCV & NumPy |
 | **Data Format** | JSON / CSV / YAML |
 

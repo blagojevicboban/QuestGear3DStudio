@@ -1,9 +1,9 @@
 # QuestGear3DStudio - Changelog
 
-## 2026-02-15: Support for QuestGear3DScan Format
+## 2026-02-15: NerfStudio Integration + QuestGear3DScan Support
 
 ### 🎯 Summary
-Added full support for the new **QuestGear3DScan** data format while maintaining backward compatibility with legacy Quest Recording Manager format.
+Added **NerfStudio training integration** for color-only reconstruction and full support for the new **QuestGear3DScan** data format. QuestGear3DStudio can now train Gaussian Splatting and NeRF models directly from the GUI while maintaining backward compatibility with legacy formats.
 
 ### ✨ Changes
 
@@ -34,6 +34,30 @@ Added full support for the new **QuestGear3DScan** data format while maintaining
 - ✅ Creates reconstruction options guide when depth is unavailable
 - ✅ Fallback workflow for color-only reconstruction (NerfStudio/COLMAP)
 - ℹ️ **Use when:** Quest Depth API returns placeholder data (uniform values)
+
+#### 5. **`modules/nerfstudio_trainer.py`** (New) ⭐
+- ✅ **Subprocess management** for NerfStudio training
+- ✅ **Real-time progress tracking** via log parsing (step, loss, PSNR, ETA)
+- ✅ **Multiple methods supported:** Splatfacto, Nerfacto, Instant-NGP, Depth-Nerfacto
+- ✅ **Callback system** for GUI integration (progress + completion hooks)
+- ✅ **Auto-detection** of NerfStudio installation
+- ✅ **Output path discovery** for trained models
+- 🎯 **Enables:** High-quality color-only reconstruction (no depth required!)
+
+#### 6. **`modules/nerfstudio_gui.py`** (New) 🎨
+- ✅ **Complete Flet UI** for NerfStudio integration
+- ✅ **Installation manager** - Install/update NerfStudio from GUI
+- ✅ **Training controls** - Method selection, iterations, start/stop
+- ✅ **Real-time progress** - Progress bar, ETA, loss, PSNR display
+- ✅ **Results viewer** - Open NerfStudio viewer with one click
+- ✅ **Tab navigation** - Seamlessly integrated into main GUI
+
+#### 7. **`modules/gui.py`** (Updated)
+- ✅ **Tab navigation system** - TSDF Reconstruction tab + NerfStudio tab
+- ✅ **Updated title** - "QuestGear 3D Studio" (from "QuestStream 3D Processor")
+- ✅ **NerfStudio integration** - Automatic initialization of NerfStudio UI
+
+
 
 ### 📂 Format Support
 

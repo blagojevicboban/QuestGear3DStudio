@@ -764,56 +764,88 @@ def main(page: ft.Page):
     def open_settings(e):
         page.open(settings_dialog)
 
-    # Layout
+    # ==== NerfStudio Integration ====
+    from .nerfstudio_gui import NerfStudioUI
+    
+    nerfstudio_ui = NerfStudioUI(
+        page=page,
+        on_log=add_log,
+        temp_dir_getter=lambda: temp_dir
+    )
+
+    # Layout - Now with Tabs
     page.appbar = ft.AppBar(
-        title=ft.Text("QuestStream 3D Processor"),
+        title=ft.Text("QuestGear 3D Studio"),
         bgcolor=ft.Colors.BLUE_800,
         actions=[
             ft.IconButton(icon=ft.Icons.SETTINGS, on_click=open_settings),
         ]
     )
 
-    main_layout = ft.Column([
-        ft.Row([
-            btn_load_zip,
-            btn_load_folder,
-            btn_stop_zip,
-            btn_process,
-            btn_stop_reconstruct,
-            btn_visualize,
-            ft.Container(content=mem_text, padding=10)
-        ]),
-        video_container := ft.Container(
-            content=ft.Column([
-                ft.Text("Video Track & Cropping:", weight="bold"),
-                preview_img,
-                frame_range_slider,
-                frame_range_label
+    # TSDF Reconstruction Tab (existing functionality)
+    tsdf_tab_content = ft.Container(
+        content=ft.Column([
+            ft.Row([
+                btn_load_zip,
+                btn_load_folder,
+                btn_stop_zip,
+                btn_process,
+                btn_stop_reconstruct,
+                btn_visualize,
+                ft.Container(content=mem_text, padding=10)
             ]),
-            padding=10,
-            bgcolor="#252525",
-            border_radius=10,
-            height=300, # Initial height
-            animate_size=None # Disable animation for smooth dragging
-        ),
-        splitter,
-        progress_bar,
-        progress_bar,
-        status_text,
-        thumb_img,
-        ft.Divider(),
-        ft.Text("Process Logs:", size=16, weight="bold"),
-        ft.Container(
-            content=log_list,
-            expand=True,
-            bgcolor="#1e1e1e",
-            border_radius=5,
-            padding=10
-        )
-    ], expand=True)
+            video_container := ft.Container(
+                content=ft.Column([
+                    ft.Text("Video Track & Cropping:", weight="bold"),
+                    preview_img,
+                    frame_range_slider,
+                    frame_range_label
+                ]),
+                padding=10,
+                bgcolor="#252525",
+                border_radius=10,
+                height=300,
+                animate_size=None
+            ),
+            splitter,
+            progress_bar,
+            status_text,
+            thumb_img,
+            ft.Divider(),
+            ft.Text("Process Logs:", size=16, weight="bold"),
+            ft.Container(
+                content=log_list,
+                expand=True,
+                bgcolor="#1e1e1e",
+                border_radius=5,
+                padding=10
+            )
+        ], expand=True),
+        expand=True
+    )
+
+    # Tab navigation
+    tabs = ft.Tabs(
+        selected_index=0,
+        animation_duration=300,
+        tabs=[
+            ft.Tab(
+                text="TSDF Reconstruction",
+                icon=ft.Icons.VIEW_IN_AR,
+                content=tsdf_tab_content
+            ),
+            nerfstudio_ui.get_tab(),
+        ],
+        expand=True
+    )
+
+    main_layout = ft.Column([tabs], expand=True)
 
     page.add(main_layout)
     page.update()
+    
+    # Start NerfStudio installation check after page is ready
+    nerfstudio_ui.start_installation_check()
 
 if __name__ == "__main__":
     ft.app(target=main)
