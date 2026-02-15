@@ -102,9 +102,19 @@ class NerfStudioTrainer:
         self.progress_callback = progress_callback
         self.completion_callback = completion_callback
         
-        # Build command
+        # Build command and find executable
+        import sys
+        import os
+        import certifi
+        
+        venv_scripts = os.path.dirname(sys.executable)
+        ns_train_exe = os.path.join(venv_scripts, 'ns-train.exe')
+        
+        # Fallback to 'ns-train' if not found in venv (though it should be)
+        executable = ns_train_exe if os.path.exists(ns_train_exe) else 'ns-train'
+        
         cmd = [
-            'ns-train',
+            executable,
             method,
             '--data', str(data_path_obj),
             '--max-num-iterations', str(max_iterations),
@@ -124,6 +134,15 @@ class NerfStudioTrainer:
         print(f"[NerfStudio] Starting: {' '.join(cmd)}")
         
         try:
+            # Fix for Windows SSL errors: [ASN1] nested asn1 error / not enough data
+            # This happens when loading certificates from a corrupted Windows store.
+            # We use certifi and disable global verification as a robust fallback.
+            env = os.environ.copy()
+            ca_bundle = certifi.where()
+            env["SSL_CERT_FILE"] = ca_bundle
+            env["REQUESTS_CA_BUNDLE"] = ca_bundle
+            env["PYTHONHTTPSVERIFY"] = "0"  # Sledgehammer for corrupted Windows cert stores
+            
             # Start process with pipes for output
             self.process = subprocess.Popen(
                 cmd,
@@ -131,7 +150,9 @@ class NerfStudioTrainer:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                universal_newlines=True
+                universal_newlines=True,
+                env=env,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
             )
             
             self.is_running = True

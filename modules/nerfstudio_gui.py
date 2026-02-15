@@ -383,7 +383,7 @@ class NerfStudioUI:
             self._update_install_log("Step 2/3: Installing critical dependencies...")
             
             # These are essential for NerfStudio to run
-            critical_deps = ['rich', 'tyro', 'mediapy', 'nerfacc', 'gsplat', 'ninja']
+            critical_deps = ['rich', 'tyro', 'mediapy', 'nerfacc', 'gsplat', 'ninja', 'viser', 'torchmetrics', 'fpsample', 'wandb', 'tensorboard', 'pathos', 'scikit-image', 'scikit-learn', 'plyfile', 'pytorch-msssim', 'pyshac', 'xatlas', 'trimesh', 'tensorly', 'comet-ml', 'python-socketio', 'python-engineio']
             
             for dep in critical_deps:
                 self._update_install_log(f"  → Installing {dep}...")
