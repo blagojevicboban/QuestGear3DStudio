@@ -278,6 +278,35 @@ class NerfStudioTrainer:
     @staticmethod
     def check_installation() -> bool:
         """Check if NerfStudio is installed and accessible."""
+        import sys
+        import os
+        
+        # Try multiple methods to detect NerfStudio
+        
+        # Method 1: Try importing nerfstudio module
+        try:
+            import nerfstudio
+            return True
+        except ImportError:
+            pass
+        
+        # Method 2: Try running ns-train from venv Scripts folder
+        try:
+            venv_path = os.path.dirname(sys.executable)
+            ns_train_exe = os.path.join(venv_path, 'ns-train.exe')
+            
+            if os.path.exists(ns_train_exe):
+                result = subprocess.run(
+                    [ns_train_exe, '--help'],
+                    capture_output=True,
+                    timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                )
+                return result.returncode == 0
+        except:
+            pass
+        
+        # Method 3: Try ns-train command directly (if in PATH)
         try:
             result = subprocess.run(
                 ['ns-train', '--help'],
@@ -286,7 +315,9 @@ class NerfStudioTrainer:
             )
             return result.returncode == 0
         except:
-            return False
+            pass
+        
+        return False
     
     @staticmethod
     def get_recommended_method(has_depth: bool) -> str:

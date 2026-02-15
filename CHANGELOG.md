@@ -5,14 +5,11 @@
 ### 🎯 Summary
 Added **NerfStudio training integration** for color-only reconstruction and full support for the new **QuestGear3DScan** data format. QuestGear3DStudio can now train Gaussian Splatting and NeRF models directly from the GUI while maintaining backward compatibility with legacy formats.
 
-**🐛 Bug Fixes:**
-- Fixed `AssertionError` in `page.run_task()` by using direct `page.update()` calls (thread-safe in Flet)
-- Fixed initialization order to prevent crashes on GUI startup
-- **Fixed Windows file locking during NerfStudio installation** (WinError 5: Access is denied)
-  - Implemented lazy cv2 loading to avoid file locks
-  - Two-step installation: core first (`--no-deps`), then dependencies
-  - Uses separate Python process with `--force-reinstall` flag
-  - Users can now install from GUI while it's running!
+- **Enhanced NerfStudio Management:**
+  - ✅ **Uninstall Feature:** Added a "Uninstall" button with confirmation dialog.
+  - ✅ **3-Step Installation:** Robust Core → Critical Deps → Remaining Deps workflow.
+  - ✅ **Windows-Safe:** Handled file locking with lazy loading and separate processes.
+  - ✅ **Improved Detection:** Reliable detection in Windows virtual environments.
 
 
 ### ✨ Changes

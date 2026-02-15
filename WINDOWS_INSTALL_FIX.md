@@ -60,6 +60,13 @@ python -m pip install nerfstudio
 3. **Status updates automatically:**
    - "❌ Not Found" → "✅ Installed"
    - Training section becomes enabled
+   - "Uninstall" button becomes visible
+
+### Uninstallation Process (In GUI):
+
+1. **Click "Uninstall"**
+2. **Confirm** in the dialog
+3. **See live progress** in the console as NerfStudio is removed.
 
 ---
 
