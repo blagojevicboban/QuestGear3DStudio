@@ -59,10 +59,14 @@ QuestGear 3D Studio now features a **fully automated integration** with [NerfStu
 ## 🧩 Troubleshooting
 
 ### `ImportError: cannot import name 'csrc' from 'gsplat'`
-*   **Cause**: You are trying to use `splatfacto` but missing the compiled CUDA binaries.
+*   **Cause**: Version mismatch between PyTorch, gsplat, and CUDA (common on older GPUs like Quadro P600).
 *   **Solution**:
-    1.  Switch to **`nerfacto`** method (works immediately).
-    2.  OR Install **Visual Studio Build Tools 2022** (Desktop C++) and re-install NerfStudio via the app.
+    1.  **Click "Uninstall"** in the NerfStudio tab.
+    2.  **Click "Install"** again. The app now automatically installs compatible versions:
+        *   PyTorch 2.1.2 + CUDA 11.8
+        *   gsplat 1.4.0
+        *   Numpy < 2.0
+    3.  If it still fails, switch to **`nerfacto`** method.
 
 ### `CUDA out of memory`
 *   **Cause**: Your GPU VRAM is full.

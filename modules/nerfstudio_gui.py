@@ -431,12 +431,14 @@ class NerfStudioUI:
                            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0)
 
             # 3. Install PyTorch with CUDA (Critical Step!)
-            self._update_install_log("Step 1/3: Installing PyTorch with CUDA support...")
+            # Updated to CUDA 11.8 for broader compatibility (Quadro P600, etc.)
+            self._update_install_log("Step 1/3: Installing PyTorch (cuda 11.8)...")
             torch_cmd = [
                 target_python, "-m", "pip", "install", 
-                "torch", "torchvision", "torchaudio",
-                "--index-url", "https://download.pytorch.org/whl/cu121",
-                "--no-cache-dir"
+                "torch==2.1.2+cu118", "torchvision==0.16.2+cu118", "torchaudio==2.1.2+cu118",
+                "--index-url", "https://download.pytorch.org/whl/cu118",
+                "--no-cache-dir",
+                "--force-reinstall"
             ]
             
             proc = subprocess.Popen(
@@ -452,14 +454,20 @@ class NerfStudioUI:
 
             # 4. Install NerfStudio & Dependencies
             self._update_install_log("Step 2/3: Installing NerfStudio & core libs...")
+            self._update_install_log("  → Ensuring numpy compatibility (<2.0)...")
+            subprocess.run([target_python, "-m", "pip", "install", "numpy<2.0.0"], 
+                           creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0)
             
             # gsplat needs special handling - install from official wheel repo with CUDA binaries
-            self._update_install_log("  → Installing gsplat with CUDA support...")
+            # Pinned to 1.4.0 for stability with older GPUs
+            self._update_install_log("  → Installing gsplat 1.4.0 with CUDA support...")
             gsplat_cmd = [
                 target_python, "-m", "pip", "install", 
-                "gsplat",
+                "gsplat==1.4.0",
                 "--find-links", "https://docs.gsplat.studio/whl/",
-                "--no-cache-dir"
+                "--no-cache-dir",
+                "--no-deps",
+                "--force-reinstall"
             ]
             proc_gsplat = subprocess.Popen(
                 gsplat_cmd,
@@ -477,7 +485,7 @@ class NerfStudioUI:
             self._update_install_log("  → Installing nerfstudio and dependencies...")
             ns_cmd = [
                 target_python, "-m", "pip", "install", 
-                "nerfstudio", "nerfacc", "viser", "tensorboard",
+                "nerfstudio==1.1.5", "nerfacc", "viser", "tensorboard",
                 "--no-warn-script-location"
             ]
             
