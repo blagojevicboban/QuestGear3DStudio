@@ -135,6 +135,11 @@ class NerfStudioTrainer:
                 if value is not True:  # Skip value for boolean flags
                     cmd.append(str(value))
         
+        # Prepare environment with unbuffered output
+        env = os.environ.copy()
+        env['PYTHONUNBUFFERED'] = '1'
+        env['COLUMNS'] = '150' # Force wide output to prevent weird wrapping
+
         print(f"[NerfStudio] Starting via launcher: {' '.join(cmd)}")
         
         try:
@@ -144,11 +149,12 @@ class NerfStudioTrainer:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1,
+                bufsize=0,              # Unbuffered
                 universal_newlines=True,
                 encoding='utf-8',       # Explicitly use UTF-8
                 errors='replace',       # Replace un-decodable bytes instead of crashing
-                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                env=env
             )
             
             self.is_running = True
@@ -169,31 +175,36 @@ class NerfStudioTrainer:
             print(f"[NerfStudio] Failed to start: {e}")
             return False
     
+    def _strip_ansi(self, text: str) -> str:
+        """Strip ANSI escape codes from string."""
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        return ansi_escape.sub('', text)
+
     def _monitor_training(self):
         """Monitor training process output and parse progress."""
         if not self.process:
             return
         
         try:
-            for line in self.process.stdout:
-                line = line.strip()
-                if not line:
-                    continue
+            buffer = []
+            while True:
+                # Read character by character to catch \r (progress bars)
+                # and prevent blocking until \n
+                char = self.process.stdout.read(1)
                 
-                # Send raw log first
-                if hasattr(self, 'log_callback') and self.log_callback:
-                    self.log_callback(line)
+                if not char:
+                    # End of stream
+                     if buffer:
+                         self._process_line("".join(buffer))
+                     break
+                
+                if char == '\n' or char == '\r':
+                    if buffer:
+                        self._process_line("".join(buffer))
+                        buffer = []
+                else:
+                    buffer.append(char)
 
-                # Parse progress from NerfStudio output
-                # Example: "Step 1000/30000 | Loss: 0.0123 | ETA: 5m 30s"
-                progress_info = self._parse_progress_line(line)
-                
-                if progress_info and self.progress_callback:
-                    self.progress_callback(progress_info)
-                
-                # Print to console for debugging
-                print(f"[NerfStudio] {line}")
-            
             # Wait for process to complete
             return_code = self.process.wait()
             
@@ -215,6 +226,28 @@ class NerfStudioTrainer:
         except Exception as e:
             print(f"[NerfStudio] Monitoring error: {e}")
             self.is_running = False
+
+    def _process_line(self, line: str):
+        """Process a single line of output."""
+         # Handle control characters that might not be stripped by line buffering
+        line = line.replace('\x00', '') # Null bytes
+        
+        # Check for "clear screen" or "move cursor" confusion
+        clean_line = self._strip_ansi(line).strip()
+        
+        if not clean_line:
+            return
+        
+        # Send raw log first (cleaned)
+        if hasattr(self, 'log_callback') and self.log_callback:
+            self.log_callback(clean_line)
+
+        # Parse progress from NerfStudio output
+        progress_info = self._parse_progress_line(clean_line)
+        
+        if progress_info and self.progress_callback:
+            self.progress_callback(progress_info)
+
     def _get_python_path(self) -> str:
         """Get path to python executable in dedicated venv."""
         import sys

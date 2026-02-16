@@ -619,8 +619,19 @@ class NerfStudioUI:
     def _on_training_log(self, line: str):
         """Handle raw log output from training - Thread Safe & Buffered."""
         should_start = False
+        
+        # Handle carriage returns and newlines (prevent excessive empty lines)
+        if '\r' in line:
+            line = line.replace('\r', '\n')
+        
+        # Filter out empty lines or just whitespace
+        segments = [s.rstrip() for s in line.split('\n') if s.strip()]
+        
+        if not segments:
+            return
+
         with self.log_lock:
-            self.log_buffer.append(line)
+            self.log_buffer.extend(segments)
             if not self.is_log_updater_running:
                 self.is_log_updater_running = True
                 should_start = True
@@ -632,6 +643,7 @@ class NerfStudioUI:
         """Accumulate logs and update UI periodically."""
         import time
         while self.log_buffer or self.trainer.is_running:
+            # If buffer empty, wait a bit
             if not self.log_buffer:
                 time.sleep(0.1)
                 continue
@@ -644,12 +656,21 @@ class NerfStudioUI:
             if not lines:
                 continue
 
+            # Performance: If we have too many logs pending (lag), just show the latest ones
+            # to prevent freezing the UI with thousands of updates.
+            if len(lines) > 100:
+                lines = lines[-100:]
+                lines.insert(0, "... [skipped info logs due to high volume] ...")
+
             # Update UI
             # We use a copy of the list to avoid locking during UI update
+            new_controls = []
             for line in lines:
-                self.training_log.controls.append(
+                new_controls.append(
                     ft.Text(line.rstrip(), size=10, font_family="Consolas", color=ft.Colors.GREEN_400)
                 )
+            
+            self.training_log.controls.extend(new_controls)
             
             # Prune if too long
             if len(self.training_log.controls) > 1000:
@@ -657,20 +678,22 @@ class NerfStudioUI:
             
             try:
                 self.page.update()
-            except:
-                pass # Page might be closed
+            except Exception:
+                pass # Page might be closed or busy
             
             time.sleep(0.1) # Max 10 updates per second
         
         with self.log_lock:
             self.is_log_updater_running = False
-    
+
     def _on_stop_click(self, e):
         """Stop training."""
-        self.trainer.stop_training()
         self.btn_stop.disabled = True
         self.btn_stop.text = "Stopping..."
         self.page.update()
+        
+        # Run stop in a thread to not block UI
+        threading.Thread(target=self.trainer.stop_training, daemon=True).start()
     
     def _on_training_progress(self, info: dict):
         """Handle training progress updates."""
