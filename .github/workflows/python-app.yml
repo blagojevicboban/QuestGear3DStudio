@@ -1,4 +1,4 @@
-name: Python CI
+name: Python Application Build
 
 on:
   push:
@@ -6,33 +6,43 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 jobs:
   build:
-
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10"]
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
+    - uses: actions/checkout@v4
     
-    - name: Install dependencies
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+        cache: 'pip'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgl1-mesa-glx libgtk-3-0 libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 xorg-dev libglu1-mesa-dev
+      # Dependencies for Open3D and Flet/PyQt
+
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install pylint pytest
-
-    # Optional: Check for syntax errors or undefined names
-    - name: Lint with pylint
+        pip install pytest flake8 PyQt6
+        # PyQt6 included for legacy tests (test_ingestion.py)
+    
+    - name: Lint with flake8
       run: |
-        # Run pylint on main scripts and modules/ directory
-        pylint --disable=C,R,W0613,W0621 --exit-zero modules/ tests/ *.py 
-
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
     - name: Test with pytest
-      run: |
-        pytest tests/
+      uses: GabrielBB/xvfb-action@v1
+      with:
+        run: pytest tests/
