@@ -213,10 +213,18 @@ class NerfStudioUI:
         # ====== Results ======
         # ====== Results ======
         self.btn_open_viewer = ft.ElevatedButton(
-            "Open Viewer",
-            icon=ft.Icons.VISIBILITY,
+            "Open External Viewer",
+            icon=ft.Icons.OPEN_IN_NEW,
             on_click=self._on_open_viewer,
             visible=False
+        )
+        self.btn_open_viewer_internal = ft.ElevatedButton(
+            "Open Internal Viewer",
+            icon=ft.Icons.WEB,
+            on_click=self._on_open_viewer_internal,
+            visible=False,
+            bgcolor=ft.Colors.BLUE_700,
+            color=ft.Colors.WHITE
         )
         self.output_path_text = ft.Text("", size=11, selectable=True)
         
@@ -267,7 +275,7 @@ class NerfStudioUI:
                 ft.Row([self.loss_text, self.psnr_text]),
                 ft.Divider(),
                 self.training_log_container, # Add log container here
-                self.btn_open_viewer,
+                ft.Row([self.btn_open_viewer, self.btn_open_viewer_internal]),
                 self.output_path_text,
             ]),
             padding=15,
@@ -852,6 +860,7 @@ class NerfStudioUI:
             self.on_log(f"✅ Training completed! Output: {output_path}")
             self.output_path_text.value = f"{output_path}" # Modified to just path for cleaner usage
             self.btn_open_viewer.visible = True
+            self.btn_open_viewer_internal.visible = True
             self.export_container.visible = True # Show export
             self._show_message("Training completed successfully!")
             
@@ -876,13 +885,45 @@ class NerfStudioUI:
     def _on_open_viewer(self, e):
         """Open NerfStudio viewer."""
         viewer_url = self.trainer.get_viewer_url("")
-        self.on_log(f"Opening viewer: {viewer_url}")
+        self.on_log(f"Opening external viewer: {viewer_url}")
         
         # Open in default browser
         import webbrowser
         webbrowser.open(viewer_url)
         
         self._show_message(f"Opening viewer at {viewer_url}")
+    
+    def _on_open_viewer_internal(self, e):
+        """Open NerfStudio viewer in a modal dialog."""
+        viewer_url = self.trainer.get_viewer_url("")
+        self.on_log(f"Opening internal viewer: {viewer_url}")
+        
+        # In Flet 0.26.0, WebView is available
+        webview = ft.WebView(
+            viewer_url,
+            expand=True,
+        )
+        
+        def close_dlg(e):
+            dlg.open = False
+            self.page.update()
+
+        dlg = ft.AlertDialog(
+            title=ft.Text("NerfStudio Viewer (Localhost)"),
+            content=ft.Container(
+                content=webview,
+                width=1200,
+                height=800,
+            ),
+            actions=[
+                ft.TextButton("Close", on_click=close_dlg),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        
+        self.page.overlay.append(dlg)
+        dlg.open = True
+        self.page.update()
     
     def _show_message(self, text: str):
         """Show snackbar message."""
@@ -1099,9 +1140,14 @@ class NerfStudioUI:
                     ], expand=True),
                     
                     ft.IconButton(
-                        icon=ft.Icons.VISIBILITY, 
-                        tooltip="View Model",
-                        on_click=lambda e, path=item['path']: self._on_view_history(path)
+                        icon=ft.Icons.OPEN_IN_NEW, 
+                        tooltip="View External",
+                        on_click=lambda e, path=item['path']: self._on_view_history(path, internal=False)
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.WEB, 
+                        tooltip="View Internal",
+                        on_click=lambda e, path=item['path']: self._on_view_history(path, internal=True)
                     ),
                     ft.IconButton(
                         icon=ft.Icons.FILE_UPLOAD, 
@@ -1123,7 +1169,7 @@ class NerfStudioUI:
              
         self.page.update()
 
-    def _on_view_history(self, path):
+    def _on_view_history(self, path, internal=False):
         """View a historical model."""
         url = self.trainer.get_viewer_url(path)
         
@@ -1136,7 +1182,7 @@ class NerfStudioUI:
         self.on_log(f"Launching viewer for: {path}")
         self._show_message("Launching viewer...")
         
-        threading.Thread(target=self._launch_viewer_process, args=(path,), daemon=True).start()
+        threading.Thread(target=self._launch_viewer_process, args=(path, internal), daemon=True).start()
 
     def _on_export_history(self, path):
         """Prepare export for historical model."""
@@ -1146,7 +1192,7 @@ class NerfStudioUI:
         self.page.update()
         self._show_message("Ready to export. Select format and click Export.")
 
-    def _launch_viewer_process(self, path):
+    def _launch_viewer_process(self, path, internal=False):
         """Launch ns-viewer in background."""
         import subprocess
         import webbrowser
@@ -1165,9 +1211,6 @@ class NerfStudioUI:
         
         self.on_log(f"Starting viewer: {' '.join(cmd)}")
         
-        # Kill existing viewers? Maybe not needed if port 7007 is free or it picks another?
-        # Usually it tries 7007.
-        
         try:
             subprocess.Popen(
                 cmd,
@@ -1176,7 +1219,12 @@ class NerfStudioUI:
             
             # Give it a moment to start
             time.sleep(3)
-            webbrowser.open("http://localhost:7007")
+            
+            if internal:
+                # Use the internal viewer logic
+                self._on_open_viewer_internal(None)
+            else:
+                webbrowser.open("http://localhost:7007")
             
         except Exception as ex:
             self.on_log(f"Failed to launch viewer: {ex}")
