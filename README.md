@@ -24,10 +24,17 @@
 - 🚀 **GPU Acceleration**: Built on **Open3D Tensor API**, utilizing CUDA for 10x-50x faster reconstruction.
 - ⚡ **Asynchronous Pipeline**: Fast data processing without freezing the interface.
 - 🎨 **Modern Deep UI**: Elegant interface built using the **Flet** platform with dynamic progress bars.
-- ⭐ **NerfStudio Integration**: **One-Click Automated Install**! Train Gaussian Splatting and NeRF models directly from the GUI (isolated environment included). [See Guide](./NERFSTUDIO_GUIDE.md)
+- ⭐ **NerfStudio Integration**:
+  - **Auto-Installer**: One-click setup of CUDA-accelerated environment.
+  - **Monocular Depth**: [NEW] Neural depth estimation fallback (MiDaS) for color-only scans.
+  - **Quality Presets**: Choose between **Fast** (preview), **Balanced**, and **Quality** modes.
+  - **Batch Processing**: Queue up multiple scans to train overnight.
+  - **Model History**: Browse and revisit all your past training runs.
+  - **Multi-Format Export**: Save as PLY, OBJ, or GLB for use in Blender/Unity/Web.
+- 🏢 **Scene Understanding**: Full support for Meta Quest Scene Model geometry and semantic labels.
 - 🛠️ **Advanced Processing**:
   - **YUV_420_888 Conversion**: Automatic conversion of Quest raw formats to RGB.
-  - **JPG/PNG Support**: Modern image formats with auto-detection
+  - **JPG/PNG Support**: Modern image formats with auto-detection.
   - **Depth Validation**: Smart detection of invalid/placeholder depth data
 - 🌐 **Scalable VoxelBlockGrid**: Efficient sparse volume reconstruction for large scenes.
 - 👓 **Stereo Reconstruction**: Utilize both Quest cameras for denser, more complete models.

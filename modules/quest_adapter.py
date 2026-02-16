@@ -118,6 +118,14 @@ class QuestDataAdapter:
             
             rotation = [w, x, y, z]
             
+            # 2. Determine Depth Path (Priority: Monocular fallback if folder exists)
+            depth_file = frame_data.get('depth_file', '')
+            mono_depth_folder = extraction_path / "depth_monocular"
+            if mono_depth_folder.exists() and depth_file:
+                # If we have a monocular depth folder, use it
+                depth_filename = os.path.basename(depth_file)
+                depth_file = f"depth_monocular/{depth_filename}"
+            
             frame = {
                 'frame_id': frame_data['frame_id'],
                 'timestamp': frame_data.get('timestamp', 0.0),
@@ -128,7 +136,7 @@ class QuestDataAdapter:
                 'cameras': {
                     'center': {  # Single camera from Camera 1
                         'image': frame_data.get('color_file', ''),
-                        'depth': frame_data.get('depth_file', '')
+                        'depth': depth_file
                     }
                 }
             }

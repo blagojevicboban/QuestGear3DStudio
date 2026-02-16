@@ -9,6 +9,7 @@
 │  │                                                                  │    │
 │  │  • Captures Camera 1 (tracking) → 1280x720 JPG                 │    │
 │  │  • Reads Environment Depth API → 320x320 PNG (16-bit)          │    │
+│  │  • [NEW] Scene Model Integration → scene_data.json             │    │
 │  │  • Tracks HMD pose (6DOF) → Position + Rotation                │    │
 │  │  • Exports transforms.json (NerfStudio format)                 │    │
 │  │                                                                  │    │
@@ -16,8 +17,9 @@
 │  │    ├── color/frame_*.jpg                                        │    │
 │  │    ├── depth/frame_*.png                                        │    │
 │  │    ├── scan_data.json                                           │    │
-│  │    └── transforms.json  ←─────────────┐                        │    │
-│  └────────────────────────────────────────│─────────────────────────┘    │
+│  │    ├── scene_data.json  [NEW]                                   │    │
+│  │    └── transforms.json                                          │    │
+│  └────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────│──────────────────────────────┘
                                           │
                     USB Transfer / ADB    │
@@ -30,25 +32,23 @@
 │  │                                                                  │    │
 │  │  ┌─────────────────────────────────────────────────────────┐   │    │
 │  │  │  Data Adapter (quest_adapter.py)                         │   │    │
-│  │  │  • Auto-detects new vs legacy format                     │   │    │
-│  │  │  • Converts scan_data.json → frames.json                 │   │    │
-│  │  │  • Extracts camera intrinsics                            │   │    │
+│  │  │  • Auto-detects formats & adapts poses                   │   │    │
+│  │  │  • [NEW] Mono-Depth Folder Priority                      │   │    │
 │  │  └─────────────────────────────────────────────────────────┘   │    │
 │  │                           ▼                                      │    │
 │  │  ┌─────────────────────────────────────────────────────────┐   │    │
 │  │  │  Image Processor (quest_image_processor.py)              │   │    │
-│  │  │  • Loads JPG/PNG (new) or YUV/RAW (legacy)               │   │    │
+│  │  │  • Multi-format loader (JPG, PNG, YUV)                   │   │    │
 │  │  │  • Validates depth quality                               │   │    │
-│  │  │  • Detects uniform/placeholder depth                     │   │    │
 │  │  └─────────────────────────────────────────────────────────┘   │    │
 │  │                           ▼                                      │    │
 │  │         ╔═══════════════════════════════════════╗                │    │
 │  │         ║  RECONSTRUCTION PATH SELECTOR         ║                │    │
 │  │         ╚═══════════════════════════════════════╝                │    │
-│  │                  /                    \                          │    │
-│  │          Valid Depth?                  No Valid Depth            │    │
-│  │                /                              \                  │    │
-│  │               ▼                                ▼                 │    │
+│  │                  /           |            \                      │    │
+│  │          Valid Depth?   No Depth ──► Generate Mono Depth         │    │
+│  │                /             |                \                  │    │
+│  │               ▼              ▼                 ▼                 │    │
 │  │  ┌──────────────────────────┐   ┌────────────────────────────┐ │    │
 │  │  │ TSDF Reconstruction      │   │ NerfStudio Training        │ │    │
 │  │  │ (reconstruction.py)      │   │ (nerfstudio_trainer.py)    │ │    │
@@ -56,12 +56,8 @@
 │  │  │ • VoxelBlockGrid (CUDA)  │   │ • Subprocess: ns-train     │ │    │
 │  │  │ • Depth fusion           │   │ • Methods:                 │ │    │
 │  │  │ • Mesh extraction        │   │   - Splatfacto ⭐         │ │    │
-│  │  │ • Post-processing        │   │   - Nerfacto              │ │    │
-│  │  │                          │   │   - Instant-NGP           │ │    │
-│  │  │ Output: .ply mesh        │   │ • Progress tracking       │ │    │
-│  │  │                          │   │ • Real-time logs          │ │    │
-│  │  │                          │   │                            │ │    │
-│  │  │                          │   │ Output: .ply gaussians     │ │    │
+│  │  │                          │   │   - Depth-Nerfacto 🧠      │ │    │
+│  │  │ Output: .ply mesh        │   │   - Nerfacto / Instant-NGP │ │    │
 │  │  └──────────────────────────┘   └────────────────────────────┘ │    │
 │  │                  │                              │                │    │
 │  │                  └──────────┬───────────────────┘                │    │
@@ -70,106 +66,23 @@
 │  │  │  3D Viewer / Export                                      │   │    │
 │  │  │  • Open3D visualization                                  │   │    │
 │  │  │  • Export to OBJ, PLY, GLB                              │   │    │
-│  │  │  • NerfStudio viewer integration (port 7007)            │   │    │
 │  │  └─────────────────────────────────────────────────────────┘   │    │
-│  │                                                                  │    │
-│  └────────────────────────────────────────────────────────────────┘    │
-│                                                                          │
-│  Optional: NerfStudio Standalone                                        │
-│  ┌────────────────────────────────────────────────────────────────┐    │
-│  │  $ ns-train splatfacto --data Scan_20260215_221412/            │    │
-│  │  → Training on GPU... (5-10 min)                                │    │
-│  │  → Viewer: http://localhost:7007                                │    │
 │  └────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Data Flow
+## Data Flow (Updated Phase 2)
 
 ### 📸 Capture (Quest 3)
-```
-HMD Movement → Pose Tracking (6DOF)
-              + Camera 1 (color images)
-              + Environment Depth API
-              ↓
-              scan_data.json + transforms.json + images
-```
+- **Object Mode**: Continuous RGB-D stream.
+- **Space Mode**: Room geometry capture via `OVRSceneManager` → `scene_data.json`.
+- **External Sensors**: Optional support via `IDepthProvider` interface.
 
-### 🔄 Processing (PC)
-```
-1. Load Scan → quest_adapter.detect_scan_format()
-               ├─ "new" → _adapt_new_format()
-               └─ "old" → _adapt_old_format()
-               ↓
-               frames.json (unified format)
+### 🧠 Monocular Depth Path
+When hardware depth is unavailable or poor quality:
+1. User clicks **"Generate Monocular Depth"** in Studio GUI.
+2. `monocular_depth.py` runs **MiDaS** inference on color frames.
+3. 16-bit depth PNGs are saved to `depth_monocular/`.
+4. `quest_adapter.py` detects this folder and overrides the original depth for training.
 
-2. Load Images → quest_image_processor.process_quest_frame()
-                 ├─ .jpg/.png → cv2.imread()
-                 └─ .yuv → yuv420_to_rgb()
-                 ↓
-                 RGB + Depth arrays
-
-3. Validate Depth → reconstruction.integrate_frame()
-                    ├─ All zeros? → Skip
-                    ├─ All same value? → Skip (placeholder)
-                    └─ Valid variation → Integrate to TSDF
-                    
-                    IF no valid depth:
-                    ↓
-                    generate_color_only.py
-                    ├─ camera_trajectory.ply
-                    └─ COLOR_ONLY_OPTIONS.md
-
-4. Reconstruction:
-   ├─ TSDF Path (if depth valid)
-   │  └─ VoxelBlockGrid → Mesh (.ply)
-   │
-   └─ NerfStudio Path (color-only)
-      ├─ nerfstudio_trainer.start_training()
-      ├─ Parse logs (progress tracking)
-      └─ Gaussian Splatting (.ply) or NeRF weights
-```
-
-### 📊 Output Formats
-
-| Method | Output | File Size | Pros | Cons |
-|--------|--------|-----------|------|------|
-| TSDF | Mesh (.ply) | 5-50 MB | Clean geometry | Needs depth |
-| Splatfacto | Gaussians (.ply) | 50-500 MB | Photorealistic | Large file |
-| Nerfacto | NeRF weights | 10-20 MB | Compact | Slow inference |
-
----
-
-## Key Integration Points
-
-### 1. Format Detection
-**File:** `modules/quest_adapter.py`
-```python
-format_type = QuestDataAdapter.detect_scan_format(scan_dir)
-# Returns: 'new' or 'old'
-```
-
-### 2. Depth Validation
-**File:** `modules/reconstruction.py`
-```python
-# Check for uniform depth (placeholder)
-unique_values = np.unique(depth_image[valid_mask])
-if len(unique_values) == 1:
-    # Skip - invalid depth
-```
-
-### 3. NerfStudio Training
-**File:** `modules/nerfstudio_trainer.py`
-```python
-trainer = NerfStudioTrainer()
-trainer.start_training(
-    data_path=scan_path,
-    method='splatfacto',
-    progress_callback=on_progress,
-    completion_callback=on_complete
-)
-```
-
----
-
-*Architecture v2.0 | 2026-02-15*
+... [rest of architecture doc follows]

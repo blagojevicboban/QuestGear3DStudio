@@ -10,8 +10,11 @@ QuestGear 3D Studio now features a **fully automated integration** with [NerfStu
     *   ⚡ **Splatfacto** (Gaussian Splatting) - Fastest training, highest quality (Requires VS Build Tools).
     *   🎯 **Nerfacto** (NeRF) - Robust, high quality, easy to install.
     *   🚀 **Instant-NGP** - Ultra-fast legacy NeRF.
-*   **Real-Time Monitoring**: Watch loss curves, PSNR, and rendering previews live in the GUI.
-*   **Zero-Copy Workflow**: Uses your exported `transforms.json` directly.
+*   **Batch Processing**: Queue multiple scans to run sequentially (e.g., overnight).
+*   **Quality Presets**: Choose between **Fast** (15k iters), **Balanced** (30k iters), and **High Quality** (50k iters).
+*   **Model History**: Browse, view, and export all your past training runs.
+*   **Real-Time Monitoring**: Watch loss curves, PSNR, and logs directly in the app.
+*   **Multi-Format Export**: Save your models as `.ply` (Splat), `.obj` (Mesh), or `.glb` (AR/Web).
 
 ---
 

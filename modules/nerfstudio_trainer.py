@@ -46,6 +46,22 @@ class NerfStudioTrainer:
             'quality': 'Excellent'
         }
     }
+
+    # Training Presets
+    PRESETS = {
+        'Fast': {
+            'description': '⚡ Fast (15k iters, ~5 min)',
+            'max_iterations': 15000,
+        },
+        'Balanced': {
+            'description': '⚖️ Balanced (30k iters, ~15 min)',
+            'max_iterations': 30000,
+        },
+        'Quality': {
+            'description': '💎 Quality (50k iters, ~30 min)',
+            'max_iterations': 50000,
+        }
+    }
     
     def __init__(self):
         self.process: Optional[subprocess.Popen] = None
@@ -452,6 +468,50 @@ class NerfStudioTrainer:
             return 'depth-nerfacto'
         else:
             return 'splatfacto'  # Fastest and best quality for color-only
+
+    def get_history(self) -> list:
+        """
+        Get list of trained models from outputs directory.
+        Returns:
+            List of dicts with {path, method, name, date, config}
+        """
+        history = []
+        outputs_dir = Path('outputs')
+        if not outputs_dir.exists():
+            return history
+            
+        # Structure: outputs/method/name/timestamp/
+        for method_dir in outputs_dir.iterdir():
+            if not method_dir.is_dir(): continue
+            
+            for name_dir in method_dir.iterdir():
+                if not name_dir.is_dir(): continue
+                
+                for timestamp_dir in name_dir.iterdir():
+                    if not timestamp_dir.is_dir(): continue
+                    
+                    config_path = timestamp_dir / 'config.yml'
+                    if config_path.exists():
+                        # Found a valid run
+                        try:
+                            # Parse date from timestamp (format: YYYY-MM-DD_HH-MM-SS)
+                            # Actually nerfstudio uses YYYY-MM-DD_HHMMSS
+                            ts_str = timestamp_dir.name
+                            date_str = ts_str
+                            
+                            history.append({
+                                'path': str(timestamp_dir),
+                                'method': method_dir.name,
+                                'name': name_dir.name,
+                                'date': date_str,
+                                'config': str(config_path)
+                            })
+                        except:
+                            pass
+                            
+        # Sort by date (descending)
+        history.sort(key=lambda x: x['date'], reverse=True)
+        return history
 
 
 # Example usage
