@@ -229,92 +229,91 @@ class NerfStudioTrainer:
 
     def _parse_progress_line(self, line: str) -> Optional[Dict[str, Any]]:
         """
-        Parse progress information from NerfStudio output line.
-        Supports various formats:
-        - "100 ( 0.33%)       0            1.23s                1h12m"
-        - "100 (0.33%)         1 s, 920.172 ms      15 h, 56 m, 53 s     2.38 K"
+        Parse progress information from NerfStudio output line - ROBUST VERSION.
+        Handles various tabular formats and extracts ETA.
         """
         line = line.strip()
         
-        # Method 1: Split by multiple spaces (Robust for tabular data)
-        parts = re.split(r'\s{2,}', line)
-        if not parts:
-            return None
-            
-        # Check first part for "Step (Pct%)"
-        # Matches: "100 ( 0.33%)" or "100 (0.33%)"
-        step_match = re.search(r'^(\d+)\s*\(\s*([0-9.]+)%\s*\)', parts[0])
-        
-        if step_match:
-            step = int(step_match.group(1))
-            percentage = float(step_match.group(2))
-            
-            # Find ETA part
-            # Look for a part that contains time units but isn't the iteration time (usually has ms/us)
-            # Heuristic: Find part with 'h', 'm', 's' that matches ETA pattern
-            eta_seconds = None
-            
-            for part in parts[1:]:
-                # Check for ETA-like string (e.g. "15 h, 56 m, 53 s" or "1m 12s")
-                # We want to avoid "1 s, 920 ms" if possible, or distinct it.
-                # ETA usually doesn't have 'ms' or 'us'
-                if 'ms' in part or 'us' in part or 'µs' in part:
-                    continue
+        try:
+            # Method 1: Look for "Step (Pct%)" pattern common in newer NerfStudio
+            # Matches: "9580 (31.93%) ..."
+            match_pct = re.search(r'(\d+)\s*\(\s*([0-9.]+)%\s*\)', line)
+            if match_pct:
+                step = int(match_pct.group(1))
+                percentage = float(match_pct.group(2))
                 
-                # Check if it has time units
-                time_matches = re.findall(r'(\d+)\s*([hms])', part)
-                if time_matches:
-                    # Calculate total seconds for this part
-                    seconds = 0
-                    for val, unit in time_matches:
-                        if unit == 'h': seconds += int(val) * 3600
-                        elif unit == 'm': seconds += int(val) * 60
-                        elif unit == 's': seconds += int(val)
+                eta_seconds = None
+                
+                # ETA Heuristic: Find the longest time duration in the line
+                # Iteration time is usually small (ms or s), ETA is usually larger (m, h)
+                
+                # Split by multiple spaces to separate columns
+                parts = re.split(r'\s{2,}', line)
+                
+                max_seconds = -1.0
+                
+                # Analyze potential time columns
+                for part in parts:
+                    # Skip the step column itself
+                    if match_pct.group(0) in part:
+                        continue
+                        
+                    # Calculate seconds for this part
+                    # part example: "10 h, 33 m, 17 s" or "1 s, 860 ms"
+                    part_seconds = 0.0
+                    has_time = False
                     
-                    # If reasonable duration (and haven't found one yet, or this one is longer/better?)
-                    # NerfStudio ETA is usually significant.
-                    eta_seconds = seconds
-                    break # Take the first valid non-ms time string as ETA
-            
-            # Fallback total steps calc
-            total_steps = int(step / (percentage / 100.0)) if percentage > 0 else 30000
-            
-            return {
-                'step': step,
-                'total_steps': total_steps,
-                'loss': None,
-                'psnr': None,
-                'eta_seconds': eta_seconds
-            }
+                    # Find all number+unit pairs
+                    # Note: We prioritize h/m/s. 'ms' usually indicates iteration time
+                    pairs = re.findall(r'(\d+)\s*([hms]|ms)', part)
+                    for val, unit in pairs:
+                        val = int(val)
+                        if unit == 'h': part_seconds += val * 3600
+                        elif unit == 'm': part_seconds += val * 60
+                        elif unit == 's': part_seconds += val
+                        elif unit == 'ms': part_seconds += val / 1000.0
+                        has_time = True
+                    
+                    if has_time:
+                        if part_seconds > max_seconds:
+                            max_seconds = part_seconds
+                
+                # If we found a valid time, assume the largest one is ETA
+                # (unless it's tiny and only ms, then maybe we have no ETA yet)
+                if max_seconds >= 0:
+                    eta_seconds = int(max_seconds)
 
-        # Method 2: Old Format Fallback (Step 100/30000 ...)
-        step_match = re.search(r'Step\s+(\d+)', line, re.IGNORECASE)
-        total_match = re.search(r'/\s*(\d+)', line)
-        loss_match = re.search(r'loss[:\s=]+([0-9.]+)', line, re.IGNORECASE)
-        psnr_match = re.search(r'psnr[:\s=]+([0-9.]+)', line, re.IGNORECASE)
-        
-        if step_match:
-            return {
-                'step': int(step_match.group(1)),
-                'total_steps': int(total_match.group(1)) if total_match else None,
-                'loss': float(loss_match.group(1)) if loss_match else None,
-                'psnr': float(psnr_match.group(1)) if psnr_match else None,
-                'eta_seconds': None
-            }
-            
-        return None
-        total_match = re.search(r'/\s*(\d+)', line)
-        loss_match = re.search(r'loss[:\s=]+([0-9.]+)', line, re.IGNORECASE)
-        psnr_match = re.search(r'psnr[:\s=]+([0-9.]+)', line, re.IGNORECASE)
-        
-        if step_match:
-            return {
-                'step': int(step_match.group(1)),
-                'total_steps': int(total_match.group(1)) if total_match else None,
-                'loss': float(loss_match.group(1)) if loss_match else None,
-                'psnr': float(psnr_match.group(1)) if psnr_match else None,
-                'eta_seconds': None
-            }
+                # Calculate total steps
+                if percentage > 0:
+                   total_steps = int(step * 100.0 / percentage)
+                else:
+                   total_steps = 30000
+                
+                return {
+                   'step': step,
+                   'total_steps': total_steps,
+                   'loss': None, # Not always available in table
+                   'psnr': None,
+                   'eta_seconds': eta_seconds
+                }
+
+            # Method 2: Old Format Fallback (Step 100/30000 ...)
+            step_match = re.search(r'Step\s+(\d+)', line, re.IGNORECASE)
+            if step_match:
+                total_match = re.search(r'/\s*(\d+)', line)
+                loss_match = re.search(r'loss[:\s=]+([0-9.]+)', line, re.IGNORECASE)
+                psnr_match = re.search(r'psnr[:\s=]+([0-9.]+)', line, re.IGNORECASE)
+                
+                return {
+                    'step': int(step_match.group(1)),
+                    'total_steps': int(total_match.group(1)) if total_match else None,
+                    'loss': float(loss_match.group(1)) if loss_match else None,
+                    'psnr': float(psnr_match.group(1)) if psnr_match else None,
+                    'eta_seconds': None
+                }
+                
+        except Exception:
+            pass # Fail gracefully
             
         return None
     

@@ -213,8 +213,12 @@ class NerfStudioUI:
             border_radius=5,
             padding=5,
             height=200,
-            visible=False # Hidden initially until training starts
+            visible=True # Always visible to ensure user sees logs
         )
+        # Thread safety lock for logs
+        self.log_lock = threading.Lock()
+        self.log_buffer = []
+        self.is_log_updater_running = False
         
         # ====== Training Container (disabled when not installed) ======
         self.training_container = ft.Container(
@@ -605,13 +609,53 @@ class NerfStudioUI:
             self.page.update()
     
     def _on_training_log(self, line: str):
-        """Handle raw log output from training."""
-        self.training_log.controls.append(
-            ft.Text(line, size=10, font_family="Consolas", color=ft.Colors.GREEN_400)
-        )
-        if len(self.training_log.controls) > 500: # Limit history
-            self.training_log.controls.pop(0)
-        self.page.update()
+        """Handle raw log output from training - Thread Safe & Buffered."""
+        should_start = False
+        with self.log_lock:
+            self.log_buffer.append(line)
+            if not self.is_log_updater_running:
+                self.is_log_updater_running = True
+                should_start = True
+        
+        if should_start:
+            threading.Thread(target=self._log_updater_loop, daemon=True).start()
+    
+    def _log_updater_loop(self):
+        """Accumulate logs and update UI periodically."""
+        import time
+        while self.log_buffer or self.trainer.is_running:
+            if not self.log_buffer:
+                time.sleep(0.1)
+                continue
+                
+            # Grab all pending logs
+            with self.log_lock:
+                lines = self.log_buffer[:]
+                self.log_buffer.clear()
+            
+            if not lines:
+                continue
+
+            # Update UI
+            # We use a copy of the list to avoid locking during UI update
+            for line in lines:
+                self.training_log.controls.append(
+                    ft.Text(line.rstrip(), size=10, font_family="Consolas", color=ft.Colors.GREEN_400)
+                )
+            
+            # Prune if too long
+            if len(self.training_log.controls) > 1000:
+                del self.training_log.controls[:len(self.training_log.controls) - 1000]
+            
+            try:
+                self.page.update()
+            except:
+                pass # Page might be closed
+            
+            time.sleep(0.1) # Max 10 updates per second
+        
+        with self.log_lock:
+            self.is_log_updater_running = False
     
     def _on_stop_click(self, e):
         """Stop training."""
