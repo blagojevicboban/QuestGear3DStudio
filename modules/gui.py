@@ -125,7 +125,7 @@ def main(page: ft.Page):
     log_list = ft.ListView(expand=True, spacing=2, auto_scroll=True)
     
     # Frame Selection Controls
-    preview_img = ft.Image(fit=ft.ImageFit.CONTAIN, visible=False, expand=True)
+    preview_img = ft.Image(src="placeholder.png", fit=ft.ImageFit.CONTAIN, visible=False, expand=True)
     frame_range_slider = ft.RangeSlider(
         min=0, max=100, 
         start_value=0, end_value=100,
@@ -182,9 +182,33 @@ def main(page: ft.Page):
                 is_success, buffer = cv2.imencode(".jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
                 if is_success:
                     b64_img = base64.b64encode(buffer).decode("utf-8")
+                    preview_img.src = "" # Clear src to ensure base64 is used
                     preview_img.src_base64 = b64_img
+                    preview_img.visible = True
                     preview_img.update()
+                else:
+                    add_log("Error: Failed to encode preview image.")
+            else:
+                 available_cams = list(frame_info.get('cameras', {}).keys())
+                 add_log(f"Warning: Could not load frame {index}. RGB is None. Requested: '{camera}'. Available: {available_cams}")
+                 # Try to fallback to any available camera for preview if specific one fails
+                 if not rgb and available_cams:
+                     fallback_cam = available_cams[0]
+                     add_log(f"Attempting fallback to '{fallback_cam}'...")
+                     rgb, _, _ = QuestImageProcessor.process_quest_frame(temp_dir, frame_info, camera=fallback_cam)
+                     if rgb is not None:
+                        cv2 = _ensure_cv2() # Ensure cv2 is loaded for fallback
+                        is_success, buffer = cv2.imencode(".jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+                        if is_success:
+                            b64_img = base64.b64encode(buffer).decode("utf-8")
+                            preview_img.src = ""
+                            preview_img.src_base64 = b64_img
+                            preview_img.visible = True
+                            preview_img.update()
+                            add_log(f"✓ Fallback successful using '{fallback_cam}'")
+
         except Exception as e:
+            add_log(f"Preview error: {e}")
             print(f"Preview error: {e}")
 
     last_range_start = -1
@@ -243,7 +267,7 @@ def main(page: ft.Page):
 
     def add_log(msg):
         now = datetime.now().strftime("%H:%M:%S")
-        log_list.controls.append(ft.Text(f"[{now}] {msg}", font_family="Consolas", size=12))
+        log_list.controls.append(ft.Text(f"[{now}] {msg}", font_family="Consolas", size=12, selectable=True))
         if len(log_list.controls) > 100:
             log_list.controls.pop(0)
         page.update()
@@ -316,7 +340,7 @@ def main(page: ft.Page):
                     frame_range_label.value = f"Frame Range: 0 - {count-1} (Total: {count})"
                     frame_range_label.visible = True
                     
-                    preview_img.visible = True
+                    # preview_img.visible = True  # Removed, will be set in update_frame_preview
                     
                     # Initial Preview
                     update_frame_preview(0)
@@ -610,7 +634,7 @@ def main(page: ft.Page):
         progress_bar.value = val
         page.update()
 
-    thumb_img = ft.Image(src="", width=320, height=240, fit=ft.ImageFit.CONTAIN, visible=False)
+    thumb_img = ft.Image(src="placeholder.png", width=320, height=240, fit=ft.ImageFit.CONTAIN, visible=False)
     
     def on_reconstruct_finished(result):
         nonlocal current_mesh
@@ -779,12 +803,15 @@ def main(page: ft.Page):
 
     # ==== NerfStudio Integration ====
     from .nerfstudio_gui import NerfStudioUI
+    from .help_gui import HelpUI
     
     nerfstudio_ui = NerfStudioUI(
         page=page,
         on_log=add_log,
         temp_dir_getter=lambda: temp_dir
     )
+
+    help_ui = HelpUI(page=page)
 
     # Layout - Now with Tabs
     page.appbar = ft.AppBar(
@@ -848,6 +875,7 @@ def main(page: ft.Page):
                 content=tsdf_tab_content
             ),
             nerfstudio_ui.get_tab(),
+            help_ui.get_tab(),
         ],
         expand=True
     )
