@@ -198,17 +198,22 @@ class QuestImageProcessor:
                 # OpenCV loads as BGR, convert to RGB
                 rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
                 
-                # Load depth if available (PNG 16-bit)
+                # Load depth if available
                 depth_path_rel = camera_data.get('depth')
                 if depth_path_rel:
                     depth_path = project_path / depth_path_rel
                     if depth_path.exists():
                         depth_map = cv2.imread(str(depth_path), cv2.IMREAD_UNCHANGED)
                         
-                        # Convert 16-bit to float if needed
-                        if depth_map is not None and depth_map.dtype == np.uint16:
-                            # Normalize to meters (assuming depth is in mm or similar)
-                            depth_map = depth_map.astype(np.float32) / 1000.0
+                        if depth_map is not None:
+                            if depth_map.dtype == np.uint16:
+                                # Legacy format: 16-bit depth in mm → meters
+                                depth_map = depth_map.astype(np.float32) / 1000.0
+                            elif depth_map.dtype == np.uint8:
+                                # Quest RFloat texture encoded to PNG as uint8
+                                # Values are NDC depth [0,1] mapped to [0,255]
+                                depth_map = depth_map.astype(np.float32) / 255.0
+                            # float32 depths pass through unchanged
                         
                         return rgb_image, depth_map, None
                     

@@ -83,13 +83,18 @@ class QuestReconstructionPipeline:
             cam_data = self.camera_metadata.get(camera, {})
             intrinsics_obj = cam_data.get('intrinsics', {})
             
+            # If not found under requested camera, try 'center' (new format)
+            if not intrinsics_obj and camera != 'center':
+                cam_data = self.camera_metadata.get('center', {})
+                intrinsics_obj = cam_data.get('intrinsics', {})
+            
             fx = intrinsics_obj.get('fx', 867.0)
             fy = intrinsics_obj.get('fy', 867.0)
             cx = intrinsics_obj.get('cx', 640.0)
             cy = intrinsics_obj.get('cy', 640.0)
             
             if debug:
-                print(f"  Using fallback intrinsics: FX={fx:.1f}, FY={fy:.1f}")
+                print(f"  Using metadata intrinsics: FX={fx:.1f}, FY={fy:.1f}")
         elif debug:
             print(f"  Using computed intrinsics: FX={fx:.1f}, FY={fy:.1f}")
         
@@ -259,11 +264,20 @@ class QuestReconstructionPipeline:
                         
                         depth_linear = convert_depth_to_linear(depth, near, far)
                     else:
-                        # Fallback: assume depth is already linear or use defaults
-                        # If raw depth was loaded as float32, it's likely non-linear NDC-like if from Quest?
-                        # Or it might be meters. Existing code assumed meters.
-                        # Let's assume meters to be safe for legacy support.
-                        depth_linear = depth
+                        # New format: depth is NDC [0,1], need to linearize
+                        depth_max = np.max(depth)
+                        if depth_max <= 1.0 and depth_max > 0:
+                            # NDC depth from Quest Environment Depth API
+                            near = 0.1
+                            far = 20.0
+                            if i < 5:
+                                msg = f"  Auto-detected NDC depth (max={depth_max:.3f}), linearizing: near={near}, far={far}"
+                                print(msg)
+                                if on_log: on_log(msg)
+                            depth_linear = convert_depth_to_linear(depth, near, far)
+                        else:
+                            # Legacy: assume depth is already in meters
+                            depth_linear = depth
                     
                     # FIX 2a: Filter depth range to remove outliers
                     # Adjusted range based on actual data: 0.1m - 5.0m (was too strict at 0.2-2.5m)

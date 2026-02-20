@@ -78,16 +78,21 @@ class QuestDataAdapter:
         if transforms_file.exists():
             with open(transforms_file, 'r') as f:
                 transforms = json.load(f)
+                intrinsics_data = {
+                    'width': transforms.get('w', 1280),
+                    'height': transforms.get('h', 720),
+                    'fx': transforms.get('fl_x', 300.0),
+                    'fy': transforms.get('fl_y', 300.0),
+                    'cx': transforms.get('cx', 640.0),
+                    'cy': transforms.get('cy', 360.0),
+                    'fov_x': transforms.get('camera_angle_x', 0.0),
+                    'fov_y': transforms.get('camera_angle_y', 0.0)
+                }
+                # Store under 'center' camera key (matching frame camera name)
+                # and as 'intrinsics' (what pipeline.get_camera_intrinsics expects)
                 camera_metadata = {
-                    'intrinsic': {
-                        'width': transforms.get('w', 1280),
-                        'height': transforms.get('h', 720),
-                        'fx': transforms.get('fl_x', 300.0),
-                        'fy': transforms.get('fl_y', 300.0),
-                        'cx': transforms.get('cx', 640.0),
-                        'cy': transforms.get('cy', 360.0),
-                        'fov_x': transforms.get('camera_angle_x', 0.0),
-                        'fov_y': transforms.get('camera_angle_y', 0.0)
+                    'center': {
+                        'intrinsics': intrinsics_data
                     }
                 }
         
