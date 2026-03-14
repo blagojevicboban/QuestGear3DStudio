@@ -250,7 +250,6 @@ def main(page: ft.Page):
     ))
     
     def stop_zip_extraction(e):
-        nonlocal current_extractor
         if current_extractor:
             add_log("STOP signal sent to extractor...")
             current_extractor.stop()
@@ -629,7 +628,6 @@ def main(page: ft.Page):
     page.overlay.append(folder_picker)
 
     def stop_reconstruction(e):
-        nonlocal thread
         if thread:
             add_log("STOP signal sent to reconstruction...")
             thread.stop()
