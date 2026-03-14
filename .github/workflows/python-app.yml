@@ -25,7 +25,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgl1-mesa-glx libgtk-3-0 libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 xorg-dev libglu1-mesa-dev
+        sudo apt-get install -y libgl1 libgtk-3-0 libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 xorg-dev libglu1-mesa-dev
       # Dependencies for Open3D and Flet/PyQt
 
     - name: Install Python dependencies
