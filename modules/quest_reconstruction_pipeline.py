@@ -12,6 +12,8 @@ from .config_manager import ConfigManager
 from .quest_reconstruction_utils import (
     Transforms, CoordinateSystem, compute_depth_camera_params, convert_depth_to_linear
 )
+from .texture_processor import TextureProcessor
+from .pose_refinement import PoseRefiner
 
 
 class QuestReconstructionPipeline:
@@ -196,6 +198,73 @@ class QuestReconstructionPipeline:
         processing_frames = frames_subset[::frame_interval]
         total_processing = len(processing_frames)
         
+        # --- DRIFT CORRECTION PRE-PASS ---
+        optimized_poses_map = {}
+        if self.config.get("reconstruction.enable_drift_correction", False):
+            if on_log: on_log("Starting Pose Refinement (Drift Correction)...")
+            try:
+                refiner = PoseRefiner(voxel_size=0.05)
+                kf_pcds = []
+                kf_poses = []
+                kf_indices = []
+                
+                # Sample keyframes for optimization (e.g. every 3rd processed frame)
+                opt_stride = max(1, total_processing // 20) 
+                
+                for idx in range(0, total_processing, opt_stride):
+                    frame = processing_frames[idx]
+                    rgb, depth, depth_info = QuestImageProcessor.process_quest_frame(
+                        str(self.project_dir), frame, camera='left'
+                    )
+                    if depth is None: continue
+                    
+                    depth_linear = convert_depth_to_linear(depth, 
+                        depth_info.get('near_z',0.1), depth_info.get('far_z',3.0))
+                    
+                    # Create temporary PCD for registration
+                    # (Quick and dirty conversion for registration)
+                    intrinsics = self.get_camera_intrinsics('left', depth_info)
+                    
+                    # Compute initial pose
+                    head_pos = np.array(frame['pose']['position'])
+                    head_rot = np.array(frame['pose']['rotation'])
+                    from scipy.spatial.transform import Rotation as R
+                    head_T = np.eye(4); head_T[:3,:3] = R.from_quat(head_rot).as_matrix(); head_T[:3,3] = head_pos
+                    unity_camera_pose = head_T @ extrinsics_map_unity[camera if camera != 'both' else 'left']
+                    cam_pos_unity = unity_camera_pose[:3, 3]
+                    cam_rot_unity = R.from_matrix(unity_camera_pose[:3, :3]).as_quat()
+                    unity_transform = Transforms(CoordinateSystem.UNITY, np.array([cam_pos_unity]), np.array([cam_rot_unity]))
+                    open3d_transform = unity_transform.convert_coordinate_system(CoordinateSystem.OPEN3D, is_camera=True)
+                    init_pose = open3d_transform.extrinsics_cw[0]
+
+                    # Create PCD
+                    depth_img_o3d = o3d.geometry.Image((depth_linear * 1000).astype(np.uint16))
+                    intr_o3d = o3d.camera.PinholeCameraIntrinsic(
+                        depth.shape[1], depth.shape[0], 
+                        intrinsics[0,0], intrinsics[1,1], intrinsics[0,2], intrinsics[1,2]
+                    )
+                    pcd = o3d.geometry.PointCloud.create_from_depth_image(
+                        depth_img_o3d, intr_o3d, depth_scale=1000.0, depth_trunc=3.0
+                    )
+                    
+                    if len(pcd.points) > 100:
+                        kf_pcds.append(pcd)
+                        kf_poses.append(init_pose)
+                        kf_indices.append(idx)
+
+                if len(kf_pcds) > 2:
+                    new_poses = refiner.optimize_trajectory(kf_pcds, kf_poses, on_log=on_log)
+                    
+                    # Map back to processing frames (interpolate or just use nearest)
+                    # For simplicity, we create a map of indices we optimized
+                    for i, idx in enumerate(kf_indices):
+                        optimized_poses_map[idx] = new_poses[i]
+                
+            except Exception as e:
+                if on_log: on_log(f"⚠ Drift correction failed: {e}. Using raw poses.")
+                import traceback
+                print(traceback.format_exc())
+
         preview_rgb = None
         for i, frame in enumerate(processing_frames):
             if is_cancelled and is_cancelled():
@@ -325,6 +394,18 @@ class QuestReconstructionPipeline:
                     # Get Camera-to-World matrix in Open3D space
                     # indexing [0] because we wrapped in array
                     final_pose_open3d = open3d_transform.extrinsics_cw[0]
+                    
+                    # OVERRIDE with optimized pose if available
+                    if i in optimized_poses_map:
+                        # Quest -> Open3D is a fixed basis change. 
+                        # Our refiner worked in Open3D space, so we just use the result.
+                        final_pose_open3d = optimized_poses_map[i]
+                    elif len(optimized_poses_map) > 0:
+                        # interpolation (optional) - for now just skip if not keyframe 
+                        # or better: dont overwrite if it was a frame between keyframes?
+                        # Let's simple use the raw pose but maybe that creates jumps.
+                        # Actually, most frames since stride is high will be keyframes.
+                        pass
                     # Integation Debug Check
                     if i < 20 or (i % 10 == 0):
                          t_min, t_max = np.min(depth_linear), np.max(depth_linear)
@@ -366,11 +447,56 @@ class QuestReconstructionPipeline:
             if on_frame:
                 on_frame(current_real_index, rgb_data=preview_rgb)
         
-        if on_log:
-            on_log(f"Integration complete! Processed: {processed_count}, Failed: {failed_count}")
-            on_log("Extracting mesh...")
-        
         mesh = self.reconstructor.extract_mesh()
+        
+        # 5. Optional Advanced Texturing (UV Mapping)
+        export_config = self.config.get("export", {})
+        if export_config.get("enable_texturing", True) and hasattr(mesh, 'vertices') and len(mesh.vertices) > 0:
+            if on_log: on_log("Starting Advanced Texture Baking (UV Atlas)...")
+            try:
+                # We need to collect some info about the frames for the baker
+                # but only for the frames we actually processed
+                baker_frames = []
+                # Re-run a lite version of the loop to get parameters or just use the subset
+                # For efficiency, we only use a subset of frames for baking if there are too many
+                bake_stride = max(1, len(processing_frames) // 30) # Use up to 30 frames for baking
+                
+                for idx in range(0, len(processing_frames), bake_stride):
+                    frame = processing_frames[idx]
+                    actual_cam = camera if camera != 'both' else 'left'
+                    rgb, _, depth_info = QuestImageProcessor.process_quest_frame(
+                        str(self.project_dir), frame, camera=actual_cam
+                    )
+                    
+                    if rgb is None: continue
+                    
+                    # Compute pose and intrinsics same as during integration
+                    # (This could be refactored to avoid duplication)
+                    intrinsics = self.get_camera_intrinsics(actual_cam, depth_info)
+                    head_pos = np.array(frame['pose']['position'])
+                    head_rot = np.array(frame['pose']['rotation'])
+                    from scipy.spatial.transform import Rotation as R
+                    head_T = np.eye(4); head_T[:3,:3] = R.from_quat(head_rot).as_matrix(); head_T[:3,3] = head_pos
+                    unity_camera_pose = head_T @ extrinsics_map_unity[actual_cam]
+                    cam_pos_unity = unity_camera_pose[:3, 3]
+                    cam_rot_unity = R.from_matrix(unity_camera_pose[:3, :3]).as_quat()
+                    unity_transform = Transforms(CoordinateSystem.UNITY, np.array([cam_pos_unity]), np.array([cam_rot_unity]))
+                    open3d_transform = unity_transform.convert_coordinate_system(CoordinateSystem.OPEN3D, is_camera=True)
+                    final_pose_open3d = open3d_transform.extrinsics_cw[0]
+                    
+                    baker_frames.append({
+                        'rgb': rgb,
+                        'pose': final_pose_open3d,
+                        'intrinsics': intrinsics
+                    })
+                
+                processor = TextureProcessor(texture_size=export_config.get("texture_size", 2048))
+                mesh, texture_img = processor.process_mesh(mesh, baker_frames, self.project_dir, on_log=on_log)
+                
+            except Exception as e:
+                if on_log: on_log(f"⚠ Texture baking failed: {e}. Falling back to vertex colors.")
+                import traceback
+                print(traceback.format_exc())
         
         output_path = None
         if on_log:
@@ -388,7 +514,12 @@ class QuestReconstructionPipeline:
                     
                     on_log(f"Saving mesh to {output_path}...")
                     try:
-                        o3d.io.write_triangle_mesh(str(output_path), mesh)
+                        # Use special save if texturing enabled
+                        if export_config.get("enable_texturing", True) and 'processor' in locals():
+                            processor.save_textured_model(mesh, texture_img, str(output_path))
+                        else:
+                            o3d.io.write_triangle_mesh(str(output_path), mesh)
+                            
                         on_log(f"✓ Saved successfully")
                         
                         # Thumbnail

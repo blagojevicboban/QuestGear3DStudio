@@ -837,6 +837,22 @@ def main(page: ft.Page):
     )
     filter_check = ft.Checkbox(label="Filter Depth", value=config_manager.get("reconstruction.use_confidence_filtered_depth", True))
     
+    enable_drift_check = ft.Checkbox(
+        label="Enable Drift Correction (SLAM)", 
+        value=config_manager.get("reconstruction.enable_drift_correction", True),
+        tooltip="Corrects long-term tracking drift using GICP and Loop Closure. Recommended for large rooms."
+    )
+    
+    refinement_method_dropdown = ft.Dropdown(
+        label="Refinement Method",
+        value=config_manager.get("reconstruction.refinement_method", "gicp"),
+        options=[
+            ft.dropdown.Option("icp", "Local ICP"),
+            ft.dropdown.Option("gicp", "Generalized ICP (Accurate)"),
+        ],
+        width=250
+    )
+    
     # Post-Processing & Export
     smoothing_input = ft.TextField(label="Smoothing Iterations", value=str(config_manager.get("post_processing.smoothing_iterations", 5)))
     decimation_input = ft.TextField(label="Target Triangles", value=str(config_manager.get("post_processing.decimation_target_triangles", 100000)))
@@ -848,6 +864,23 @@ def main(page: ft.Page):
             ft.dropdown.Option("obj", "OBJ (Universal)"),
             ft.dropdown.Option("glb", "GLB (Web/AR)"),
         ]
+    )
+    
+    enable_texturing_check = ft.Checkbox(
+        label="Advanced Texturing (UV Mapping)", 
+        value=config_manager.get("export.enable_texturing", True),
+        tooltip="Generate a texture atlas (.png) instead of vertex colors. Best for game engines."
+    )
+    
+    texture_size_dropdown = ft.Dropdown(
+        label="Texture Resolution",
+        value=str(config_manager.get("export.texture_size", 2048)),
+        options=[
+            ft.dropdown.Option("1024", "1024 x 1024"),
+            ft.dropdown.Option("2048", "2048 x 2048"),
+            ft.dropdown.Option("4096", "4096 x 4096 (High Res)"),
+        ],
+        width=200
     )
     
     initial_dir_input = ft.TextField(
@@ -864,11 +897,15 @@ def main(page: ft.Page):
             config_manager.set("reconstruction.frame_interval", int(frame_int_input.value))
             config_manager.set("reconstruction.camera", camera_dropdown.value)
             config_manager.set("reconstruction.use_confidence_filtered_depth", filter_check.value)
+            config_manager.set("reconstruction.enable_drift_correction", enable_drift_check.value)
+            config_manager.set("reconstruction.refinement_method", refinement_method_dropdown.value)
             
             # Post-processing
             config_manager.set("post_processing.smoothing_iterations", int(smoothing_input.value))
             config_manager.set("post_processing.decimation_target_triangles", int(decimation_input.value))
             config_manager.set("export.format", export_fmt_dropdown.value)
+            config_manager.set("export.enable_texturing", enable_texturing_check.value)
+            config_manager.set("export.texture_size", int(texture_size_dropdown.value))
             
             # App Settings
             config_manager.set("app_settings.initial_directory", initial_dir_input.value)
@@ -895,13 +932,15 @@ def main(page: ft.Page):
             frame_int_input,
             camera_dropdown,
             filter_check,
+            enable_drift_check,
+            refinement_method_dropdown,
             ft.Divider(),
-            ft.Text("Post-Processing", weight="bold"),
+            ft.Text("Post-Processing & Export", weight="bold"),
             smoothing_input,
             decimation_input,
-            ft.Divider(),
-            ft.Text("Export", weight="bold"),
             export_fmt_dropdown,
+            enable_texturing_check,
+            texture_size_dropdown,
             ft.Divider(),
             ft.Text("Application", weight="bold"),
             ft.Row([
@@ -948,12 +987,16 @@ def main(page: ft.Page):
                     frame_int_input,
                     camera_dropdown,
                     filter_check,
+                    enable_drift_check,
+                    refinement_method_dropdown,
                 ], col={"sm": 12, "md": 6}),
                 ft.Column([
                     ft.Text("Post-Processing & Export", size=18, weight="bold"),
                     smoothing_input,
                     decimation_input,
                     export_fmt_dropdown,
+                    enable_texturing_check,
+                    texture_size_dropdown,
                     ft.Divider(),
                     ft.Text("Neural Rendering (NerfStudio)", size=18, weight="bold"),
                     nerfstudio_ui.method_dropdown,

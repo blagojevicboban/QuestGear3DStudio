@@ -28,6 +28,12 @@ The application is divided into a UI layer and a logic layer (backend) that comm
 - **QuestReconstructor**: Initializes `VoxelBlockGrid`. Supports both CPU and GPU (CUDA).
 - **Integration**: Converts numerical arrays (RGB, Linear Depth) into Open3D Tensors and integrates safe, verified data.
 
+### Texturing Layer (`modules/texture_processor.py`)
+- **TextureProcessor**: Advanced UV unwrapping and texture baking.
+
+### SLAM Layer (`modules/pose_refinement.py`)
+- **PoseRefiner**: Implements GICP registration and Pose Graph Optimization for global accuracy.
+
 ## 2. Data Flow
 
 1. **User selects ZIP** -> `FilePicker` in the GUI.

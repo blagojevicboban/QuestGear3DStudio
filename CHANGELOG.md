@@ -9,7 +9,9 @@ Enhanced the User Experience (UX) by integrating a real-time 3D visualizer direc
 *   **⚙️ Persistent Settings & Dynamic Updates**:
     *   Loading default values if the file does not exist.
     *   Persistent storage of application preferences (e.g., `initial_directory`, `nerfstudio.method`).
-    *   Dynamic updating of values via the **Settings Tab** or Quick Settings dialog without restarting the application.
+    *   Dynamic updating of values via the **Settings Tab** or Quick Settings dialog.
+    *   **Advanced Texture Mapping (UV Atlas)**: Added support for UV unwrapping (xatlas) and projective texture baking.
+    *   **Drift Correction & Loop Closure**: Implemented GICP-based SLAM refinement to correct Quest tracking drift in large-scale scans.
 *   **🌐 Embedded 3D Viewer**:
     *   Integrated **Three.js** via Flet's `WebView`.
     *   Interactive orbit controls (rotate, zoom, pan).

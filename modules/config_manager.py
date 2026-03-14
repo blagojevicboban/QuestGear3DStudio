@@ -4,16 +4,19 @@ import copy
 
 DEFAULT_CONFIG = {
     "reconstruction": {
-        "voxel_size": 0.01,
+        "voxel_size": 0.02,
         "trunc_voxel_multiplier": 8.0,
-        "depth_max": 2.0,
+        "depth_max": 10.0,
         "use_confidence_filtered_depth": True,
         "confidence_threshold": 0.05,
         "valid_count_threshold": 4,
         "block_resolution": 16,
         "block_count": 50000,
         "frame_interval": 5,
-        "camera": "left"
+        "camera": "left",
+        "enable_drift_correction": True,
+        "refinement_method": "gicp", # icp, gicp
+        "loop_closure_detection": True
     },
     "ingestion": {
         "validation_checksum": True,
@@ -29,7 +32,8 @@ DEFAULT_CONFIG = {
     "export": {
         "format": "glb",  # ply, obj, glb
         "save_mesh": True,
-        "save_pointcloud": False,
+        "enable_texturing": True,
+        "texture_size": 2048
     },
     "app_settings": {
         "initial_directory": "D:\\METAQUEST"
