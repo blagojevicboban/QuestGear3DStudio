@@ -20,28 +20,46 @@ from .monocular_depth import DepthEstimator
 class QuestReconstructionPipeline:
     """End-to-end reconstruction pipeline for Quest data."""
     
-    def __init__(self, project_dir, config_manager: ConfigManager):
+    def __init__(self, project_dirs, config_manager: ConfigManager):
         """
         Initialize reconstruction pipeline.
         
         Args:
-            project_dir: Path to extracted Quest data
+            project_dirs: Path or list of paths to extracted Quest data
             config_manager: Configuration manager
         """
-        self.project_dir = Path(project_dir)
+        if isinstance(project_dirs, (str, Path)):
+            self.project_dirs = [Path(project_dirs)]
+        else:
+            self.project_dirs = [Path(d) for d in project_dirs]
+            
         self.config = config_manager
         self.reconstructor = QuestReconstructor(config_manager) if HAS_OPEN3D else None
         
-        # Load frames.json
-        frames_json = self.project_dir / "frames.json"
-        if not frames_json.exists():
-            raise FileNotFoundError(f"frames.json not found in {project_dir}")
+        # Load and aggregate frames from all project directories
+        self.frames = []
+        self.camera_metadata = {} # Global/Merged metadata
         
-        with open(frames_json, 'r') as f:
-            self.data = json.load(f)
+        for p_dir in self.project_dirs:
+            frames_json = p_dir / "frames.json"
+            if not frames_json.exists():
+                continue
+                
+            with open(frames_json, 'r') as f:
+                data = json.load(f)
+                
+            # Update camera metadata (last one wins for now, usually identical)
+            self.camera_metadata.update(data.get('camera_metadata', {}))
+            
+            # Tag frames with their source directory
+            new_frames = data.get('frames', [])
+            for f in new_frames:
+                f['_project_dir'] = p_dir
+                
+            self.frames.extend(new_frames)
         
-        self.frames = self.data.get('frames', [])
-        self.camera_metadata = self.data.get('camera_metadata', {})
+        if not self.frames:
+            raise FileNotFoundError(f"No valid frames.json found in any of the provided directories: {project_dirs}")
         
     def get_camera_intrinsics(self, camera='left', depth_info=None, debug=False):
         """
@@ -214,8 +232,9 @@ class QuestReconstructionPipeline:
                 
                 for idx in range(0, total_processing, opt_stride):
                     frame = processing_frames[idx]
+                    p_dir = frame.get('_project_dir', self.project_dirs[0])
                     rgb, depth, depth_info = QuestImageProcessor.process_quest_frame(
-                        str(self.project_dir), frame, camera='left'
+                        str(p_dir), frame, camera='left'
                     )
                     if depth is None: continue
                     
@@ -296,9 +315,10 @@ class QuestReconstructionPipeline:
                 try:
                     # FIX 1: Map 'color' option to 'left' camera (Quest RGB is left camera)
                     actual_cam = 'left' if cam == 'color' else cam
+                    p_dir = frame.get('_project_dir', self.project_dirs[0])
                     
                     rgb, depth, depth_info = QuestImageProcessor.process_quest_frame(
-                        str(self.project_dir),
+                        str(p_dir),
                         frame,
                         camera=actual_cam
                     )
@@ -478,9 +498,10 @@ class QuestReconstructionPipeline:
                 
                 for idx in range(0, len(processing_frames), bake_stride):
                     frame = processing_frames[idx]
+                    p_dir = frame.get('_project_dir', self.project_dirs[0])
                     actual_cam = camera if camera != 'both' else 'left'
                     rgb, _, depth_info = QuestImageProcessor.process_quest_frame(
-                        str(self.project_dir), frame, camera=actual_cam
+                        str(p_dir), frame, camera=actual_cam
                     )
                     
                     if rgb is None: continue
@@ -522,7 +543,9 @@ class QuestReconstructionPipeline:
                 fmt = export_config.get("format", "obj")
                 
                 if export_config.get("save_mesh", True):
-                    export_dir = self.project_dir / "Export"
+                    # Output to the first project directory's Export folder
+                    main_p_dir = self.project_dirs[0]
+                    export_dir = main_p_dir / "Export"
                     export_dir.mkdir(exist_ok=True)
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     output_path = export_dir / f"reconstruction_{timestamp}.{fmt}"
@@ -546,7 +569,7 @@ class QuestReconstructionPipeline:
                             vis.update_renderer()
                             thumb_path = export_dir / f"thumbnail_{timestamp}.png"
                             vis.capture_screen_image(str(thumb_path), do_render=True)
-                            latest_thumb = self.project_dir / "thumbnail.png"
+                            latest_thumb = main_p_dir / "thumbnail.png"
                             import shutil
                             shutil.copy2(str(thumb_path), str(latest_thumb))
                             vis.destroy_window()

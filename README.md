@@ -49,7 +49,8 @@
 - 🛰️ **Drift Correction (SLAM)**: [NEW] **Generalized ICP** and **Pose Graph Optimization** to correct tracking drift and ensure global accuracy in large scenes.
 - 🕳️ **AI Hole Filling**: [NEW] **MiDaS-based Depth Inpainting** to intelligently fill gaps on reflective or dark surfaces.
 - 🗿 **Poisson Reconstruction**: [NEW] Generate **water-tight (solid)** 3D meshes, perfect for 3D printing and clean topology.
-- 🚀 **Multi-Backend Acceleration**: [NEW] Support for **NVIDIA CUDA** and **AMD/Intel DirectML (ONNX)** for high-speed AI processing on any hardware.
+- 🚀 **Multi-Backend Acceleration**: [NEW] Support for **NVIDIA CUDA** and **AMD/Intel DirectML (ONNX)** for high-speed AI processing.
+- 🏘️ **Multi-Scan Merging**: [NEW] Stitch multiple ZIP recordings into a single large-scale scene (room-by-room scanning).
 
 ---
 

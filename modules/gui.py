@@ -115,11 +115,11 @@ def main(page: ft.Page):
     config_manager = ConfigManager()
     
     # State
-    temp_dir = None
+    temp_dirs = [] # List of extracted paths
     current_mesh = None
-    frames_data = [] # List of frame objects
+    frames_data = [] # List of frame objects (aggregated)
     current_extractor = None # Tracking for cancellation
-    pending_zip_path = None # For confirmation dialog
+    pending_zip_paths = [] # For confirmation dialog
     
     # Controls
     status_text = ft.Text("Ready")
@@ -186,12 +186,32 @@ def main(page: ft.Page):
             rgb = rgb_data
             if rgb is None:
                 # Load frame using QuestImageProcessor if not provided
+                # Determine which project directory this frame belongs to
+                # For preview, we might need a better way to find the path
+                # but currently frames_data is aggregated fs.
+                # However, QuestImageProcessor.process_quest_frame needs ONLY the project_dir.
+                # We need to find the dir that contains this frame.
                 frame_info = frames_data[index]
+                
+                # Logic to find correct temp_dir for this frame
+                found_dir = None
+                for d in temp_dirs:
+                    if os.path.exists(os.path.join(d, "frames.json")):
+                        # Simple check: does it exist in images?
+                        # This is slightly slow but works for preview
+                        rgb_rel = frame_info.get('cameras', {}).get('left', {}).get('color_path')
+                        if rgb_rel and os.path.exists(os.path.join(d, rgb_rel)):
+                            found_dir = d
+                            break
+                
+                if not found_dir and temp_dirs:
+                    found_dir = temp_dirs[0]
+                
                 camera = config_manager.get("reconstruction.camera", "left")
                 if camera == 'both': camera = 'left' # Preview left for stereo
                 
                 rgb, _, _ = QuestImageProcessor.process_quest_frame(
-                    temp_dir, frame_info, camera=camera
+                    found_dir, frame_info, camera=camera
                 )
             
             if rgb is not None:
@@ -241,13 +261,14 @@ def main(page: ft.Page):
     btn_visualize = ft.ElevatedButton("Open External Window", icon=ft.Icons.OPEN_IN_NEW, disabled=True)
     
     # Selection buttons (declared here as variables so they can be disabled)
-    btn_load_zip = ft.ElevatedButton("Load ZIP", icon=ft.Icons.UPLOAD_FILE, on_click=lambda _: file_picker.pick_files(
-        dialog_title="Open Quest Capture ZIP",
+    btn_load_zip = ft.ElevatedButton("Load ZIP(s)", icon=ft.Icons.UPLOAD_FILE, on_click=lambda _: file_picker.pick_files(
+        dialog_title="Open Quest Capture ZIP(s)",
         allowed_extensions=["zip"],
+        allow_multiple=True,
         initial_directory=config_manager.get("app_settings.initial_directory") if os.path.exists(config_manager.get("app_settings.initial_directory", "")) else None
     ))
-    btn_load_folder = ft.ElevatedButton("Load Folder", icon=ft.Icons.FOLDER_OPEN, on_click=lambda _: folder_picker.get_directory_path(
-        dialog_title="Open Extracted Quest Data Folder",
+    btn_load_folder = ft.ElevatedButton("Load Folder(s)", icon=ft.Icons.FOLDER_OPEN, on_click=lambda _: folder_picker.get_directory_path(
+        dialog_title="Open Extracted Quest Data Folder(s)",
         initial_directory=config_manager.get("app_settings.initial_directory") if os.path.exists(config_manager.get("app_settings.initial_directory", "")) else None
     ))
     
@@ -330,54 +351,23 @@ def main(page: ft.Page):
         page.snack_bar.open = True
         page.update()
 
-    def load_frames_ui(frames_json_path):
-        nonlocal frames_data
-        try:
-            with open(frames_json_path, 'r') as f:
-                data = json.load(f)
-                frames_data = data.get('frames', [])
-                
-                if frames_data:
-                    count = len(frames_data)
-                    frame_range_slider.min = 0
-                    frame_range_slider.max = count - 1
-                    frame_range_slider.start_value = 0
-                    frame_range_slider.end_value = count - 1
-                    frame_range_slider.divisions = count
-                    frame_range_slider.visible = True
-                    frame_range_slider.disabled = False
-                    
-                    frame_range_label.value = f"Frame Range: 0 - {count-1} (Total: {count})"
-                    frame_range_label.visible = True
-                    
-                    current_frame_indicator.min = 0
-                    current_frame_indicator.max = count - 1
-                    current_frame_indicator.divisions = count
-                    current_frame_indicator.value = 0
-                    current_frame_indicator.visible = True
-                    
-                    # preview_img.visible = True  # Removed, will be set in update_frame_preview
-                    
-                    # Initial Preview
-                    update_frame_preview(0)
-                    
-                    add_log(f"Loaded {count} frames.")
-        except Exception as e:
-            add_log(f"Error loading frames info: {e}")
+    # Combined load_frames_ui moved to load_frames_ui_from_data below
 
     def on_img_load_progress(val):
         progress_bar.value = val / 100.0
         page.update()
 
     def on_img_load_finished(path):
-        nonlocal temp_dir, current_extractor
-        temp_dir = path
+        nonlocal temp_dirs, current_extractor
+        if path not in temp_dirs:
+            temp_dirs.append(path)
+        
         current_extractor = None
         progress_bar.visible = False
         btn_stop_zip.visible = False
         btn_load_zip.disabled = False
         btn_load_folder.disabled = False
-        status_text.value = f"Extracted to {path}"
+        status_text.value = f"Loaded {len(temp_dirs)} project(s)"
         add_log(f"Extraction complete: {path}")
         
         # Check if this is Quest format (no frames.json)
@@ -388,16 +378,59 @@ def main(page: ft.Page):
                 from modules.quest_adapter import QuestDataAdapter
                 frames_json_path = QuestDataAdapter.adapt_quest_data(path)
                 add_log(f"✓ Created frames.json")
-                add_log(f"Quest data successfully converted!")
             except Exception as e:
                 add_log(f"ERROR converting Quest data: {str(e)}")
-                show_msg(f"Failed to convert Quest data: {str(e)}")
                 return
         
-        # Load frames.json for preview
-        load_frames_ui(frames_json)
+        # Aggregate all frames from all temp_dirs
+        aggregate_frames()
         
-        btn_process.disabled = False
+        # If we have more pending ZIPs, start next one
+        if pending_zip_paths:
+            next_zip = pending_zip_paths.pop(0)
+            start_extraction(next_zip)
+        else:
+            btn_process.disabled = False
+
+    def aggregate_frames():
+        nonlocal frames_data
+        frames_data = [] # Reset and aggregate
+        
+        for d in temp_dirs:
+            fj = os.path.join(d, "frames.json")
+            if os.path.exists(fj):
+                try:
+                    with open(fj, 'r') as f:
+                        data = json.load(f)
+                        fs = data.get('frames', [])
+                        # We don't need to tag here for UI preview as we use temp_dirs logic
+                        frames_data.extend(fs)
+                except: pass
+        
+        if frames_data:
+            load_frames_ui_from_data(frames_data)
+
+    def load_frames_ui_from_data(data):
+        count = len(data)
+        frame_range_slider.min = 0
+        frame_range_slider.max = count - 1
+        frame_range_slider.start_value = 0
+        frame_range_slider.end_value = count - 1
+        frame_range_slider.divisions = count
+        frame_range_slider.visible = True
+        frame_range_slider.disabled = False
+        
+        frame_range_label.value = f"Aggregate Frame Range: 0 - {count-1} (Total: {count})"
+        frame_range_label.visible = True
+        
+        current_frame_indicator.min = 0
+        current_frame_indicator.max = count - 1
+        current_frame_indicator.divisions = count
+        current_frame_indicator.value = 0
+        current_frame_indicator.visible = True
+        
+        update_frame_preview(0)
+        add_log(f"Aggregated {count} frames from {len(temp_dirs)} projects.")
         show_msg("Data loaded successfully.")
 
     def on_img_load_error(err):
@@ -511,51 +544,88 @@ def main(page: ft.Page):
         ],
         width=300
     )
+    def on_recon_progress(val):
+        progress_bar.value = val
+        page.update()
+
+    def on_recon_status(msg):
+        status_text.value = msg
+        page.update()
+
+    def on_recon_log(msg):
+        add_log(msg)
+
+    def on_recon_finished(result):
+        nonlocal current_mesh
+        current_mesh = result.get('mesh')
+        
+        full_path = result.get('output_path')
+        if full_path:
+            add_log(f"✓ Saved to: {full_path}")
+            # Try to load into internal viewer if it's GLB
+            if full_path.lower().endswith(".glb"):
+                update_internal_viewer(full_path)
+
+        status_text.value = "Reconstruction Complete!"
+        status_text.color = ft.Colors.GREEN_400
+        btn_process.disabled = False
+        btn_visualize.disabled = False
+        btn_load_zip.disabled = False
+        btn_load_folder.disabled = False
+        btn_stop_reconstruct.visible = False
+        frame_range_slider.disabled = False
+        progress_bar.visible = False
+        page.update()
+
+    def on_recon_error(err):
+        status_text.value = "Error during reconstruction"
+        status_text.color = ft.Colors.RED_400
+        add_log(f"ERROR: {err}")
+        btn_process.disabled = False
+        btn_load_zip.disabled = False
+        btn_load_folder.disabled = False
+        btn_stop_reconstruct.visible = False
+        frame_range_slider.disabled = False
+        progress_bar.visible = False
+        show_msg(f"Error: {err}")
+        page.update()
+
+    def on_recon_frame(index, rgb_data=None):
+        update_frame_preview(index, rgb_data)
 
     def confirm_start_reconstruction(e):
-        nonlocal thread
         page.close(reconstruct_format_dialog)
         
-        # Save selected format to config for the pipeline to pick up
         config_manager.set("export.format", format_dropdown_start.value)
         
-        if not temp_dir:
+        if not temp_dirs:
+            add_log("Error: No data loaded.")
             return
         
         btn_process.disabled = True
         btn_load_zip.disabled = True
         btn_load_folder.disabled = True
         btn_stop_reconstruct.visible = True
-        frame_range_slider.disabled = True # Disable slider during processing
+        frame_range_slider.disabled = True 
         status_text.value = f"Initializing ({format_dropdown_start.value.upper()})..."
-        progress_bar.visible = True
-        progress_bar.value = 0
-        
-        # Reset visualizer button "glow"
-        btn_visualize.bgcolor = None 
-        btn_visualize.color = None
-        btn_visualize.scale = 1.0
         status_text.color = None
-        
-        # Show and init indicator
-        current_frame_indicator.visible = True
-        current_frame_indicator.value = int(frame_range_slider.start_value)
-        
+        progress_bar.visible = True
+        progress_bar.value = None
         page.update()
         
-        # Get frame range
         start_frame = int(frame_range_slider.start_value) if frame_range_slider.visible else 0
         end_frame = int(frame_range_slider.end_value) if frame_range_slider.visible else None
         
+        nonlocal thread
         thread = ReconstructionThread(
-            temp_dir,
+            temp_dirs,
             config_manager,
-            on_progress=on_reconstruct_progress,
-            on_status=lambda s: (setattr(status_text, "value", s) or page.update()),
-            on_log=add_log,
-            on_finished=on_reconstruct_finished,
-            on_error=on_reconstruct_error,
-            on_frame=update_frame_preview, # Live preview!
+            on_progress=on_recon_progress,
+            on_status=on_recon_status,
+            on_log=on_recon_log,
+            on_finished=on_recon_finished,
+            on_error=on_recon_error,
+            on_frame=on_recon_frame,
             start_frame=start_frame,
             end_frame=end_frame
         )
@@ -587,64 +657,68 @@ def main(page: ft.Page):
         actions_alignment=ft.MainAxisAlignment.END,
     )
 
-    file_picker = ft.FilePicker()
-    file_picker.on_result = load_zip_result
-    page.overlay.append(file_picker)
-    page.overlay.append(confirm_dialog) # Register dialog
-    page.overlay.append(reconstruct_format_dialog) # Register format dialog
+    # File Pickers
+    file_picker = ft.FilePicker(on_result=on_file_result)
+    folder_picker = ft.FilePicker(on_result=on_folder_result)
+    settings_folder_picker = ft.FilePicker(on_result=lambda e: (setattr(initial_dir_input, "value", e.path), page.update()) if e.path else None)
+    
+    page.overlay.extend([file_picker, folder_picker, settings_folder_picker, confirm_dialog, reconstruct_format_dialog])
 
-    def load_folder_result(e: ft.FilePickerResultEvent):
+    def on_file_result(e: ft.FilePickerResultEvent):
+        nonlocal pending_zip_paths, temp_dirs, frames_data
+        if e.files:
+            # New selection resets previous (multi-scan starts fresh or adds?)
+            # User likely wants to clear previous choice when clicking "Load ZIP" again
+            temp_dirs = [] 
+            frames_data = []
+            
+            pending_zip_paths = [f.path for f in e.files]
+            if pending_zip_paths:
+                first_zip = pending_zip_paths.pop(0)
+                start_extraction(first_zip)
+
+    def start_extraction(zip_path):
+        nonlocal current_extractor
+        btn_load_zip.disabled = True
+        btn_load_folder.disabled = True
+        btn_process.disabled = True
+        btn_stop_zip.visible = True
+        progress_bar.visible = True
+        
+        current_extractor = AsyncExtractor(zip_path, on_progress=on_img_load_progress, on_finished=on_img_load_finished, on_log=add_log)
+        current_extractor.start()
+        status_text.value = f"Extracting {os.path.basename(zip_path)}..."
+        page.update()
+
+    def on_folder_result(e: ft.FilePickerResultEvent):
+        nonlocal temp_dirs, frames_data
         if e.path:
-            folder_path = e.path
-            log_list.controls.clear()
-            add_log(f"Selected folder: {folder_path}")
+            path = e.path
+            if path not in temp_dirs:
+                temp_dirs.append(path)
             
-            status_text.value = "Processing folder..."
-            page.update()
-            
-            # Use the folder directly (no extraction needed)
-            nonlocal temp_dir
-            temp_dir = folder_path
-            add_log(f"Using folder: {folder_path}")
-            
-            # Check if this is Quest format (no frames.json)
-            frames_json = os.path.join(folder_path, "frames.json")
-            if not os.path.exists(frames_json):
-                add_log("Quest format detected - converting to frames.json...")
+            # Check for conversion
+            fj = os.path.join(path, "frames.json")
+            if not os.path.exists(fj):
                 try:
                     from modules.quest_adapter import QuestDataAdapter
-                    frames_json_path = QuestDataAdapter.adapt_quest_data(folder_path)
-                    add_log(f"✓ Created frames.json")
-                    add_log(f"Quest data successfully converted!")
-                except Exception as e:
-                    add_log(f"ERROR converting Quest data: {str(e)}")
-                    show_msg(f"Failed to convert Quest data: {str(e)}")
-                    status_text.value = "Failed to process folder"
-                    page.update()
-                    return
+                    QuestDataAdapter.adapt_quest_data(path)
+                    add_log(f"✓ Adapted {path}")
+                except: pass
             
-            status_text.value = f"Loaded folder: {folder_path}"
-            
-            # Load frames UI
-            load_frames_ui(frames_json)
-            
+            aggregate_frames()
             btn_process.disabled = False
+            status_text.value = f"Loaded {len(temp_dirs)} project(s)"
             page.update()
-            show_msg("Folder loaded successfully.")
 
-    folder_picker = ft.FilePicker()
-    folder_picker.on_result = load_folder_result
-    
-    def on_settings_folder_result(e: ft.FilePickerResultEvent):
-        if e.path:
-            initial_dir_input.value = e.path
-            initial_dir_input.update()
-
-    settings_folder_picker = ft.FilePicker()
-    settings_folder_picker.on_result = on_settings_folder_result
-    
-    page.overlay.append(folder_picker)
-    page.overlay.append(settings_folder_picker)
+    # Register overlays
+    page.overlay.extend([
+        file_picker, 
+        folder_picker, 
+        settings_folder_picker, 
+        confirm_dialog, 
+        reconstruct_format_dialog
+    ])
 
     def stop_reconstruction(e):
         if thread:
@@ -1005,7 +1079,7 @@ def main(page: ft.Page):
     nerfstudio_ui = NerfStudioUI(
         page=page,
         on_log=add_log,
-        temp_dir_getter=lambda: temp_dir,
+        temp_dir_getter=lambda: temp_dirs[0] if temp_dirs else None,
         config_manager=config_manager
     )
 
