@@ -338,7 +338,7 @@ def main(page: ft.Page):
             load_frames_ui_from_data(frames_data)
 
     def on_img_load_finished(path):
-        nonlocal temp_dirs, current_extractor
+        nonlocal current_extractor
         if path not in temp_dirs:
             temp_dirs.append(path)
         
@@ -410,7 +410,6 @@ def main(page: ft.Page):
                 start_extraction(first_zip)
 
     def on_folder_result(e: ft.FilePickerResultEvent):
-        nonlocal temp_dirs, frames_data
         if e.path:
             path = e.path
             if path not in temp_dirs:
@@ -437,7 +436,6 @@ def main(page: ft.Page):
             page.update()
 
     def stop_reconstruction(e):
-        nonlocal thread
         if thread:
             add_log("STOP signal sent to reconstruction...")
             thread.stop()
