@@ -135,6 +135,16 @@ def main(page: ft.Page):
     )
     frame_range_label = ft.Text("Frame Range: -", visible=False)
     
+    current_frame_indicator = ft.Slider(
+        min=0, max=100, value=0,
+        visible=False,
+        disabled=False,
+        active_color=ft.Colors.TRANSPARENT,
+        inactive_color=ft.Colors.TRANSPARENT,
+        thumb_color=ft.Colors.AMBER,
+        on_change=lambda _: None  # Read-only
+    )
+    
     # Splitter Handling
     video_section_height = 300
     
@@ -161,19 +171,26 @@ def main(page: ft.Page):
         )
     )
 
-    def update_frame_preview(index):
+    def update_frame_preview(index, rgb_data=None):
         if not frames_data or index < 0 or index >= len(frames_data):
             return
             
         try:
-            # Load frame using QuestImageProcessor
-            frame_info = frames_data[index]
-            camera = config_manager.get("reconstruction.camera", "left")
-            if camera == 'both': camera = 'left' # Preview left for stereo
+            # Update current frame indicator (visually moving circle)
+            current_frame_indicator.value = index
+            current_frame_indicator.visible = True
+            current_frame_indicator.update()
             
-            rgb, _, _ = QuestImageProcessor.process_quest_frame(
-                temp_dir, frame_info, camera=camera
-            )
+            rgb = rgb_data
+            if rgb is None:
+                # Load frame using QuestImageProcessor if not provided
+                frame_info = frames_data[index]
+                camera = config_manager.get("reconstruction.camera", "left")
+                if camera == 'both': camera = 'left' # Preview left for stereo
+                
+                rgb, _, _ = QuestImageProcessor.process_quest_frame(
+                    temp_dir, frame_info, camera=camera
+                )
             
             if rgb is not None:
                 # Ensure cv2 is loaded before use
@@ -188,28 +205,13 @@ def main(page: ft.Page):
                     preview_img.update()
                 else:
                     add_log("Error: Failed to encode preview image.")
-            else:
+            elif rgb_data is None: # Only log if we attempted manual load and failed
+                 frame_info = frames_data[index]
                  available_cams = list(frame_info.get('cameras', {}).keys())
-                 add_log(f"Warning: Could not load frame {index}. RGB is None. Requested: '{camera}'. Available: {available_cams}")
-                 # Try to fallback to any available camera for preview if specific one fails
-                 if not rgb and available_cams:
-                     fallback_cam = available_cams[0]
-                     add_log(f"Attempting fallback to '{fallback_cam}'...")
-                     rgb, _, _ = QuestImageProcessor.process_quest_frame(temp_dir, frame_info, camera=fallback_cam)
-                     if rgb is not None:
-                        cv2 = _ensure_cv2() # Ensure cv2 is loaded for fallback
-                        is_success, buffer = cv2.imencode(".jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
-                        if is_success:
-                            b64_img = base64.b64encode(buffer).decode("utf-8")
-                            preview_img.src = ""
-                            preview_img.src_base64 = b64_img
-                            preview_img.visible = True
-                            preview_img.update()
-                            add_log(f"✓ Fallback successful using '{fallback_cam}'")
-
+                 add_log(f"Warning: Could not load frame {index}. RGB is None.")
+                 # Fallback attempt ... (keeping simplified to avoid bloat)
         except Exception as e:
             add_log(f"Preview error: {e}")
-            print(f"Preview error: {e}")
 
     last_range_start = -1
     last_range_end = -1
@@ -339,6 +341,12 @@ def main(page: ft.Page):
                     
                     frame_range_label.value = f"Frame Range: 0 - {count-1} (Total: {count})"
                     frame_range_label.visible = True
+                    
+                    current_frame_indicator.min = 0
+                    current_frame_indicator.max = count - 1
+                    current_frame_indicator.divisions = count
+                    current_frame_indicator.value = 0
+                    current_frame_indicator.visible = True
                     
                     # preview_img.visible = True  # Removed, will be set in update_frame_preview
                     
@@ -514,6 +522,17 @@ def main(page: ft.Page):
         status_text.value = f"Initializing ({format_dropdown_start.value.upper()})..."
         progress_bar.visible = True
         progress_bar.value = 0
+        
+        # Reset visualizer button "glow"
+        btn_visualize.bgcolor = None 
+        btn_visualize.color = None
+        btn_visualize.scale = 1.0
+        status_text.color = None
+        
+        # Show and init indicator
+        current_frame_indicator.visible = True
+        current_frame_indicator.value = int(frame_range_slider.start_value)
+        
         page.update()
         
         # Get frame range
@@ -650,22 +669,30 @@ def main(page: ft.Page):
             filename = f"reconstruction.{fmt}"
             full_path = os.path.join(temp_dir, filename) if temp_dir else filename
         
-        status_text.value = "Reconstruction Complete"
+        status_text.value = "Reconstruction Complete! (3D Visualizer Enabled)"
+        status_text.color = ft.Colors.GREEN_400
         btn_process.disabled = False
+        
+        # Make Visualizer button "glow"
         btn_visualize.disabled = False
+        btn_visualize.bgcolor = ft.Colors.GREEN_700
+        btn_visualize.color = ft.Colors.WHITE
+        btn_visualize.scale = 1.05
+        
         btn_load_zip.disabled = False
         btn_load_folder.disabled = False
         btn_stop_reconstruct.visible = False
         frame_range_slider.disabled = False # Re-enable slider
         
         add_log(f"✓ Reconstruction finished: {len(mesh.vertices)} vertices.")
+        add_log("✨ 3D Visualizer is now available!")
         
         # Verify file and update title/logs
         if full_path and os.path.exists(full_path):
             add_log(f"✓ File saved: {filename}")
             add_log(f"  Path: {full_path}")
             page.title = f"QuestGear 3D Studio - {filename}"
-            show_msg(f"Success! Model saved to:\n{full_path}")
+            show_msg(f"Success! 3D Visualizer is ready.")
         else:
             add_log(f"⚠ Mesh extracted but file {filename} not found in {temp_dir}")
             page.title = "QuestGear 3D Studio"
@@ -701,6 +728,12 @@ def main(page: ft.Page):
     btn_process.on_click = start_reconstruction
 
     def show_visualizer(e):
+        # Reset "glow" when clicked
+        btn_visualize.bgcolor = None
+        btn_visualize.color = None
+        btn_visualize.scale = 1.0
+        btn_visualize.update()
+        
         if not HAS_OPEN3D:
             show_msg("Visualizer not available (Open3D missing).")
             return
@@ -838,7 +871,10 @@ def main(page: ft.Page):
                 content=ft.Column([
                     ft.Text("Video Track & Cropping:", weight="bold"),
                     preview_img,
-                    frame_range_slider,
+                    ft.Stack([
+                        frame_range_slider,
+                        ft.IgnorePointer(current_frame_indicator)
+                    ], height=40),
                     frame_range_label
                 ]),
                 padding=10,

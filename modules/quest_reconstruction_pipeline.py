@@ -196,6 +196,7 @@ class QuestReconstructionPipeline:
         processing_frames = frames_subset[::frame_interval]
         total_processing = len(processing_frames)
         
+        preview_rgb = None
         for i, frame in enumerate(processing_frames):
             if is_cancelled and is_cancelled():
                 if on_log: on_log("Reconstruction CANCELLED by user.")
@@ -203,7 +204,6 @@ class QuestReconstructionPipeline:
                 
             current_real_index = start_frame + i * frame_interval
             
-            if on_frame: on_frame(current_real_index)
             if on_progress: on_progress(int((i + 1) / total_processing * 100))
             if on_log and i % max(1, total_processing // 20) == 0:
                 on_log(f"Processing frame set {i+1}/{total_processing}...")
@@ -221,6 +221,7 @@ class QuestReconstructionPipeline:
             head_T[:3, :3] = head_R
             head_T[:3, 3] = head_pos
             
+            preview_rgb = None
             for cam in cameras_to_process:
                 try:
                     # FIX 1: Map 'color' option to 'left' camera (Quest RGB is left camera)
@@ -236,6 +237,10 @@ class QuestReconstructionPipeline:
                         failed_count += 1
                         continue
                      
+                    # Save for GUI preview (prefer 'left' or first available)
+                    if preview_rgb is None or actual_cam == 'left':
+                        preview_rgb = rgb
+
                     # 1. Get accurate intrinsics
                     intrinsics = self.get_camera_intrinsics(cam, depth_info, debug=(i < 5))
                     
@@ -356,6 +361,10 @@ class QuestReconstructionPipeline:
                     if on_log and failed_count < 5:
                         on_log(f"Error processing {cam} frame {i}: {str(e)}")
                     failed_count += 1
+            
+            # Update GUI preview with processed RGB (saves redundant disk read)
+            if on_frame:
+                on_frame(current_real_index, rgb_data=preview_rgb)
         
         if on_log:
             on_log(f"Integration complete! Processed: {processed_count}, Failed: {failed_count}")
