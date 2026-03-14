@@ -44,7 +44,12 @@
 - 🔍 **Robust Monitoring**: Accurate RAM usage tracking and high-quality reconstruction thumbnails.
 - 🛑 **Full Control**: Native **Stop** buttons for both ZIP extraction and 3D reconstruction processes.
 - 📐 **Customizable Layout**: Resizable panels to adjust the workspace to your preference.
-- 🖼️ **Interactive Visualizer**: Focused 3D window for external model inspection with rotation, zoom, and shading support.
+- 🖼️ **Integrated 3D Viewer**: [NEW] High-performance **Three.js** viewer embedded directly in the UI for instant GLB inspection.
+- 🎨 **Advanced Texturing**: [NEW] **UV Unwrapping (xatlas)** and **Projective Texture Baking** for sharp, professional-grade visual quality.
+- 🛰️ **Drift Correction (SLAM)**: [NEW] **Generalized ICP** and **Pose Graph Optimization** to correct tracking drift and ensure global accuracy in large scenes.
+- 🕳️ **AI Hole Filling**: [NEW] **MiDaS-based Depth Inpainting** to intelligently fill gaps on reflective or dark surfaces.
+- 🗿 **Poisson Reconstruction**: [NEW] Generate **water-tight (solid)** 3D meshes, perfect for 3D printing and clean topology.
+- 🚀 **Multi-Backend Acceleration**: [NEW] Support for **NVIDIA CUDA** and **AMD/Intel DirectML (ONNX)** for high-speed AI processing on any hardware.
 
 ---
 
@@ -102,6 +107,9 @@ QuestStream/
 │   ├── quest_adapter.py # Quest data adaptation
 │   ├── quest_image_processor.py # YUV/Depth processing
 │   ├── quest_reconstruction_utils.py # Poses/Depth Utils
+│   ├── texture_processor.py # UV Unwrapping & Baking
+│   ├── pose_refinement.py   # SLAM & Drift Correction
+│   ├── monocular_depth.py   # AI Inpainting & ONNX Engine
 │   └── config_manager.py# YAML Config loader
 └── README_QUEST.md    # Detailed instructions for Quest 3 pipeline
 ```
