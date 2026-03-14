@@ -46,6 +46,7 @@ class ReconstructionThread(threading.Thread):
     """
     def __init__(self, data_dir, config_manager, on_progress=None, on_status=None, on_log=None, on_finished=None, on_error=None, on_frame=None, start_frame=0, end_frame=None):
         super().__init__()
+        self.daemon = True # Ensure thread dies when app closes
         self.data_dir = data_dir
         self.config_manager = config_manager
         self.on_progress = on_progress
@@ -137,15 +138,16 @@ def main(page: ft.Page):
     btn_stop_reconstruct = ft.ElevatedButton("Stop", icon=ft.Icons.STOP, visible=False, bgcolor=ft.Colors.RED_700, color=ft.Colors.WHITE)
     
     btn_toggle_view = ft.TextButton(
-        "Switch to 2D Preview", 
-        icon=ft.Icons.IMAGE, 
+        "Switch to 3D View", 
+        icon=ft.Icons.VIEW_IN_AR, 
         visible=False,
         on_click=lambda _: (
             setattr(preview_img, "visible", not preview_img.visible),
             setattr(viewer_3d, "visible", not viewer_3d.visible),
             setattr(frame_range_slider, "visible", preview_img.visible),
             setattr(frame_range_label, "visible", preview_img.visible),
-            setattr(btn_toggle_view, "text", "Switch to 3D View" if viewer_3d.visible else "Switch to 2D Preview"),
+            setattr(btn_toggle_view, "text", "Switch to 2D Preview" if preview_img.visible == False else "Switch to 3D View"),
+            setattr(btn_toggle_view, "icon", ft.Icons.IMAGE if preview_img.visible == False else ft.Icons.VIEW_IN_AR),
             page.update()
         )
     )
@@ -162,7 +164,7 @@ def main(page: ft.Page):
     current_frame_indicator = ft.Slider(
         min=0, max=100, value=0,
         visible=False,
-        disabled=False,
+        disabled=True,
         active_color=ft.Colors.TRANSPARENT,
         inactive_color=ft.Colors.TRANSPARENT,
         thumb_color=ft.Colors.AMBER,
@@ -205,7 +207,9 @@ def main(page: ft.Page):
             # Update current frame indicator (visually moving circle)
             current_frame_indicator.value = index
             current_frame_indicator.visible = True
-            current_frame_indicator.update()
+            try:
+                current_frame_indicator.update()
+            except: pass
             
             rgb = rgb_data
             if rgb is None:
@@ -219,20 +223,38 @@ def main(page: ft.Page):
                 
                 # Logic to find correct temp_dir for this frame
                 found_dir = None
+                curr_camera = config_manager.get("reconstruction.camera", "left")
+                if curr_camera == "both": curr_camera = "left"
+                
+                # Check which cameras are available in this frame
+                available_cameras = list(frame_info.get('cameras', {}).keys())
+                camera_keys_to_try = [curr_camera] + available_cameras
+                
                 for d in temp_dirs:
-                    if os.path.exists(os.path.join(d, "frames.json")):
-                        # Simple check: does it exist in images?
-                        # This is slightly slow but works for preview
-                        rgb_rel = frame_info.get('cameras', {}).get('left', {}).get('color_path')
+                    if not os.path.exists(os.path.join(d, "frames.json")):
+                        continue
+                    
+                    for ck in camera_keys_to_try:
+                        cam_data = frame_info.get('cameras', {}).get(ck, {})
+                        if not cam_data: continue
+                        
+                        # Support both 'image' (standard) and 'color_path' (legacy/other)
+                        rgb_rel = cam_data.get('image') or cam_data.get('color_path')
                         if rgb_rel and os.path.exists(os.path.join(d, rgb_rel)):
                             found_dir = d
                             break
+                    if found_dir: break
                 
                 if not found_dir and temp_dirs:
                     found_dir = temp_dirs[0]
                 
                 camera = config_manager.get("reconstruction.camera", "left")
-                if camera == 'both': camera = 'left' # Preview left for stereo
+                if camera == 'both' or camera not in available_cameras:
+                    # Fallback to whatever camera we found in the loop
+                    for ck in camera_keys_to_try:
+                        if ck in available_cameras:
+                            camera = ck
+                            break
                 
                 rgb, _, _ = QuestImageProcessor.process_quest_frame(
                     found_dir, frame_info, camera=camera
@@ -242,19 +264,38 @@ def main(page: ft.Page):
                 # Ensure cv2 is loaded before use
                 cv2 = _ensure_cv2()
                 # Convert to base64 for Flet
-                is_success, buffer = cv2.imencode(".jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
-                if is_success:
-                    b64_img = base64.b64encode(buffer).decode("utf-8")
-                    preview_img.src = "" # Clear src to ensure base64 is used
-                    preview_img.src_base64 = b64_img
-                    preview_img.visible = True
-                    preview_img.update()
-                else:
-                    add_log("Error: Failed to encode preview image.")
+                try:
+                    is_success, buffer = cv2.imencode(".jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+                    if is_success:
+                        b64_img = base64.b64encode(buffer).decode("utf-8")
+                        preview_img.src_base64 = b64_img
+                        preview_img.src = "" # Use empty string instead of None
+                        preview_img.visible = True
+                        
+                        # If we're updating a frame, we likely want the 2D view visible
+                        if not viewer_3d.visible:
+                             preview_img.visible = True
+                        
+                        preview_img.update()
+                        
+                        # Ensure toggle button is visible if we have a preview
+                        if not btn_toggle_view.visible:
+                            btn_toggle_view.visible = True
+                            btn_toggle_view.text = "Switch to 3D View" # Initial state when loading images
+                            btn_toggle_view.icon = ft.Icons.VIEW_IN_AR
+                            btn_toggle_view.update()
+                    else:
+                        add_log("Error: Failed to encode preview image.")
+                except Exception as encode_err:
+                    add_log(f"Error encoding frame: {encode_err}")
             elif rgb_data is None: # Only log if we attempted manual load and failed
                  frame_info = frames_data[index]
                  available_cams = list(frame_info.get('cameras', {}).keys())
-                 add_log(f"Warning: Could not load frame {index}. RGB is None.")
+                 add_log(f"Warning: Could not load frame {index}. RGB is None. Available cams: {available_cams}")
+                 if not found_dir:
+                     add_log(f"  Reason: Correct project directory not found for this frame.")
+                 else:
+                     add_log(f"  Reason: QuestImageProcessor returned None for dir {found_dir}")
                  # Fallback attempt ... (keeping simplified to avoid bloat)
         except Exception as e:
             add_log(f"Preview error: {e}")
@@ -286,12 +327,16 @@ def main(page: ft.Page):
         log_list.controls.append(ft.Text(f"[{now}] {msg}", font_family="Consolas", size=12, selectable=True))
         if len(log_list.controls) > 100:
             log_list.controls.pop(0)
-        page.update()
+        try:
+            page.update()
+        except: pass
 
     def show_msg(text):
         page.snack_bar = ft.SnackBar(content=ft.Text(text))
         page.snack_bar.open = True
-        page.update()
+        try:
+            page.update()
+        except: pass
 
     def on_img_load_progress(val):
         progress_bar.value = val / 100.0
@@ -315,6 +360,13 @@ def main(page: ft.Page):
         current_frame_indicator.divisions = count
         current_frame_indicator.value = 0
         current_frame_indicator.visible = True
+        
+        # Ensure we are in 2D preview mode
+        preview_img.visible = True
+        viewer_3d.visible = False
+        btn_toggle_view.visible = True
+        btn_toggle_view.text = "Switch to 3D View"
+        btn_toggle_view.icon = ft.Icons.VIEW_IN_AR
         
         update_frame_preview(0)
         add_log(f"Aggregated {count} frames from {len(temp_dirs)} projects.")
@@ -537,7 +589,9 @@ def main(page: ft.Page):
 
     def on_reconstruct_progress(val):
         progress_bar.value = val
-        page.update()
+        try:
+            page.update()
+        except: pass
 
     # viewer_3d already defined above
 
@@ -569,7 +623,9 @@ def main(page: ft.Page):
             frame_range_label.visible = False
             
             add_log("🚀 3D Model loaded in internal viewer")
-            page.update()
+            try:
+                page.update()
+            except: pass
         except Exception as ex:
             add_log(f"Internal Viewer Error: {ex}")
 
@@ -631,7 +687,9 @@ def main(page: ft.Page):
         if full_path and full_path.lower().endswith('.glb'):
             update_internal_viewer(full_path)
         
-        page.update()
+        try:
+            page.update()
+        except: pass
 
     def on_reconstruct_error(err):
         status_text.value = "Data Loaded" if temp_dirs else "Ready"
@@ -643,7 +701,9 @@ def main(page: ft.Page):
         frame_range_slider.disabled = False # Re-enable slider
         add_log(f"Reconstruction Info: {err}")
         progress_bar.visible = False
-        page.update()
+        try:
+            page.update()
+        except: pass
 
     def start_reconstruction(e):
         # This now just opens the format selection dialog
@@ -971,8 +1031,8 @@ def main(page: ft.Page):
                         viewer_3d,
                     ], expand=True),
                     ft.Stack([
+                        ft.TransparentPointer(current_frame_indicator),
                         frame_range_slider,
-                        ft.TransparentPointer(current_frame_indicator)
                     ], height=40),
                     frame_range_label
                 ]),
@@ -1023,6 +1083,14 @@ def main(page: ft.Page):
     main_layout = ft.Column([tabs], expand=True)
 
     page.add(main_layout)
+    
+    def on_window_event(e):
+        if e.data == "close":
+            if thread and thread.is_alive():
+                thread.stop()
+            page.window_destroy()
+
+    page.on_window_event = on_window_event
     page.update()
     
     # Start NerfStudio installation check after page is ready
