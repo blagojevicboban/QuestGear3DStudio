@@ -257,6 +257,18 @@ class QuestReconstructor:
         pp_config = self.config_manager.get("post_processing") if hasattr(self, "config_manager") else None
         
         # Fallback if config_manager not passed to __init__ (it is passed in current code)
+        if pp_config and pp_config.get("enable_poisson", False):
+            print("Applying Poisson Surface Reconstruction for hole filling...")
+            # Poisson requires normals, extract from VBG as PCD first or compute on mesh
+            mesh_legacy.compute_vertex_normals()
+            # method returns (mesh, densities)
+            mesh_legacy, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+                self.extract_point_cloud(), depth=pp_config.get("poisson_depth", 8)
+            )
+            # Remove low-density vertices (outliers created by Poisson)
+            vertices_to_remove = densities < np.quantile(densities, 0.1)
+            mesh_legacy.remove_vertices_by_mask(vertices_to_remove)
+
         if pp_config and pp_config.get("enable", False):
             mesh_legacy = self.post_process_mesh(mesh_legacy, pp_config)
             

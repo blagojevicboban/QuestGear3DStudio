@@ -73,6 +73,46 @@ class DepthEstimator:
 
         return depth_map
 
+    def hybrid_fill(self, raw_depth, rgb_image):
+        """
+        Use AI depth to fill holes (zeros) in the raw hardware depth.
+        Uses a least-squares fit to scale AI relative depth to hardware meters.
+        """
+        if raw_depth is None or rgb_image is None:
+            return raw_depth
+            
+        ai_depth = self.estimate_depth(rgb_image) # Normalized 0..1 (usually inverse depth)
+        
+        # Hardware depth zeros are holes
+        mask_valid = (raw_depth > 0.1) & (raw_depth < 10.0)
+        mask_holes = (raw_depth <= 0.1) | (raw_depth >= 10.0)
+        
+        if not np.any(mask_valid):
+            return raw_depth # Can't align
+            
+        # Linear Regression to find Scale and Shift
+        # hardware_depth (meters) = A * ai_depth + B
+        # Or more accurately for MiDaS: hardware_depth = A * (1/ai_depth) + B if ai_depth is disparity
+        # MiDaS small/large returns disparity-like maps.
+        
+        # We'll use a simple linear fit on the valid overlap
+        X = ai_depth[mask_valid]
+        Y = raw_depth[mask_valid]
+        
+        # Solve Y = A*X + B
+        # (N,2) matrix with [X, 1]
+        A_mat = np.vstack([X, np.ones(len(X))]).T
+        m, c = np.linalg.lstsq(A_mat, Y, rcond=None)[0]
+        
+        # Predict meters for every pixel
+        filled_depth = np.copy(raw_depth)
+        ai_predicted_meters = m * ai_depth + c
+        
+        # Apply filling to holes
+        filled_depth[mask_holes] = np.clip(ai_predicted_meters[mask_holes], 0.1, 10.0)
+        
+        return filled_depth
+
     def save_depth_map(self, depth_map, output_path):
         """
         Save depth map as 16-bit PNG (scaled to 0-65535).

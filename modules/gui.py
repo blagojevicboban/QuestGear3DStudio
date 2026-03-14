@@ -853,9 +853,27 @@ def main(page: ft.Page):
         width=250
     )
     
+    enable_inpainting_check = ft.Checkbox(
+        label="AI Depth Inpainting (Fill Holes)", 
+        value=config_manager.get("reconstruction.enable_inpainting", False),
+        tooltip="Uses MiDaS AI to fill holes in glossy surfaces. Note: Heavy on CPU/GPU."
+    )
+    
     # Post-Processing & Export
     smoothing_input = ft.TextField(label="Smoothing Iterations", value=str(config_manager.get("post_processing.smoothing_iterations", 5)))
     decimation_input = ft.TextField(label="Target Triangles", value=str(config_manager.get("post_processing.decimation_target_triangles", 100000)))
+    
+    enable_poisson_check = ft.Checkbox(
+        label="Poisson Surface Reconstruction (Solid)", 
+        value=config_manager.get("post_processing.enable_poisson", False),
+        tooltip="Creates a water-tight (solid) mesh. Best for 3D printing or closing large holes."
+    )
+    
+    poisson_depth_slider = ft.Slider(
+        min=5, max=12, divisions=7, 
+        label="Poisson Detail: {value}",
+        value=config_manager.get("post_processing.poisson_depth", 8)
+    )
     export_fmt_dropdown = ft.Dropdown(
         label="Export Format",
         value=config_manager.get("export.format", "glb"),
@@ -899,10 +917,13 @@ def main(page: ft.Page):
             config_manager.set("reconstruction.use_confidence_filtered_depth", filter_check.value)
             config_manager.set("reconstruction.enable_drift_correction", enable_drift_check.value)
             config_manager.set("reconstruction.refinement_method", refinement_method_dropdown.value)
+            config_manager.set("reconstruction.enable_inpainting", enable_inpainting_check.value)
             
             # Post-processing
             config_manager.set("post_processing.smoothing_iterations", int(smoothing_input.value))
             config_manager.set("post_processing.decimation_target_triangles", int(decimation_input.value))
+            config_manager.set("post_processing.enable_poisson", enable_poisson_check.value)
+            config_manager.set("post_processing.poisson_depth", int(poisson_depth_slider.value))
             config_manager.set("export.format", export_fmt_dropdown.value)
             config_manager.set("export.enable_texturing", enable_texturing_check.value)
             config_manager.set("export.texture_size", int(texture_size_dropdown.value))
@@ -934,10 +955,14 @@ def main(page: ft.Page):
             filter_check,
             enable_drift_check,
             refinement_method_dropdown,
+            enable_inpainting_check,
             ft.Divider(),
             ft.Text("Post-Processing & Export", weight="bold"),
             smoothing_input,
             decimation_input,
+            enable_poisson_check,
+            ft.Text("Poisson Detail Level:"),
+            poisson_depth_slider,
             export_fmt_dropdown,
             enable_texturing_check,
             texture_size_dropdown,
@@ -989,11 +1014,15 @@ def main(page: ft.Page):
                     filter_check,
                     enable_drift_check,
                     refinement_method_dropdown,
+                    enable_inpainting_check,
                 ], col={"sm": 12, "md": 6}),
                 ft.Column([
                     ft.Text("Post-Processing & Export", size=18, weight="bold"),
                     smoothing_input,
                     decimation_input,
+                    enable_poisson_check,
+                    ft.Text("Poisson Detail Level:"),
+                    poisson_depth_slider,
                     export_fmt_dropdown,
                     enable_texturing_check,
                     texture_size_dropdown,

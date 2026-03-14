@@ -11,7 +11,8 @@ Enhanced the User Experience (UX) by integrating a real-time 3D visualizer direc
     *   Persistent storage of application preferences (e.g., `initial_directory`, `nerfstudio.method`).
     *   Dynamic updating of values via the **Settings Tab** or Quick Settings dialog.
     *   **Advanced Texture Mapping (UV Atlas)**: Added support for UV unwrapping (xatlas) and projective texture baking.
-    *   **Drift Correction & Loop Closure**: Implemented GICP-based SLAM refinement to correct Quest tracking drift in large-scale scans.
+    *   **Drift Correction & Loop Closure**: Implemented GICP-based SLAM refinement to correct Quest tracking drift.
+    *   **AI Hole Filling & Poisson Reconstruction**: Added MiDaS-based depth inpainting and Poisson Surface Reconstruction for watertight, solid 3D models.
 *   **🌐 Embedded 3D Viewer**:
     *   Integrated **Three.js** via Flet's `WebView`.
     *   Interactive orbit controls (rotate, zoom, pan).

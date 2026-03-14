@@ -14,6 +14,7 @@ from .quest_reconstruction_utils import (
 )
 from .texture_processor import TextureProcessor
 from .pose_refinement import PoseRefiner
+from .monocular_depth import DepthEstimator
 
 
 class QuestReconstructionPipeline:
@@ -428,6 +429,17 @@ class QuestReconstructionPipeline:
                         if on_log: on_log(err_msg)
                         print(err_msg)
                         continue
+
+                    # AI Inpainting Pre-process
+                    if self.config.get("reconstruction.enable_inpainting", False):
+                        try:
+                            if not hasattr(self, 'depth_inpainter'):
+                                self.depth_inpainter = DepthEstimator(model_type="MiDaS_small")
+                            
+                            depth_linear = self.depth_inpainter.hybrid_fill(depth_linear, rgb)
+                            if i < 5: on_log(f"  AI Inpainting applied to frame {i}")
+                        except Exception as e:
+                            if i == 0: on_log(f"⚠ AI Inpainting failed: {e}")
 
                     # Integrate
                     self.reconstructor.integrate_frame(

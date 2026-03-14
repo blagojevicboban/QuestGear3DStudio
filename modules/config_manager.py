@@ -16,7 +16,8 @@ DEFAULT_CONFIG = {
         "camera": "left",
         "enable_drift_correction": True,
         "refinement_method": "gicp", # icp, gicp
-        "loop_closure_detection": True
+        "loop_closure_detection": True,
+        "enable_inpainting": False, # AI Depth Inpainting (Slows down)
     },
     "ingestion": {
         "validation_checksum": True,
@@ -25,6 +26,8 @@ DEFAULT_CONFIG = {
         "enable": True,
         "smoothing_iterations": 5, # Laplacian smoothing
         "decimation_target_triangles": 100000, # 0 to disable
+        "enable_poisson": False, # Poisson Surface Reconstruction (Water-tight)
+        "poisson_depth": 8,
         "remove_outliers": True,
         "outlier_nb_neighbors": 20,
         "outlier_std_ratio": 2.0

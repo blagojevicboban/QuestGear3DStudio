@@ -46,8 +46,10 @@ The application is divided into a UI layer and a logic layer (backend) that comm
         - Read Depth file -> `filter_depth` (if configured).
         - Frame is integrated into the `Volume`.
         - **Stereo Mode**: If enabled, both Left and Right camera frames are integrated. The system calculates the world pose for each camera using the Head Pose and known Extrinsics (IPD offset).
-5. **Finalization**: 
+5.    - **Finalization**: 
     - `extract_mesh()` generates a mesh.
+    - **Inpainting**: (Optional) AI fills holes in depth maps using `hybrid_fill`.
+    - **Poisson Reconstruction**: (Optional) Generates watertight mesh from point clouds.
     - **Post-Processing**: Smoothing and decimation are applied.
     - **Export**: Mesh is saved as .obj/.glb.
     - **Thumbnail**: A preview image is captured using an off-screen visualizer.
