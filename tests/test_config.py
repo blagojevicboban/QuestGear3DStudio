@@ -29,6 +29,8 @@ class TestConfigManager(unittest.TestCase):
     def test_nested_get(self):
         self.assertEqual(self.cm.get("export.format"), "glb")
         self.assertEqual(self.cm.get("app_settings.initial_directory"), "D:\\METAQUEST")
+        self.assertEqual(self.cm.get("nerfstudio.method"), "splatfacto")
+        self.assertEqual(self.cm.get("nerfstudio.max_iterations"), 30000)
         self.assertIsNone(self.cm.get("non.existent.key"))
 
 if __name__ == '__main__':

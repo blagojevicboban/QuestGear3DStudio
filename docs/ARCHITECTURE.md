@@ -50,7 +50,7 @@ The application is divided into a UI layer and a logic layer (backend) that comm
 
 All parameters are stored in `config.yml`. `ConfigManager` enables:
 - Loading default values if the file does not exist.
-- Persistent storage of application preferences (e.g., `initial_directory`).
+- Persistent storage of application preferences (e.g., `initial_directory`, `nerfstudio.method`, `nerfstudio.preset`, `nerfstudio.max_iterations`).
 - Dynamic updating of values via the **Settings Tab** or Quick Settings dialog without restarting the application.
 
 ## 4. Error Handling

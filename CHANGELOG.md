@@ -1,11 +1,15 @@
 # QuestGear3DStudio - Changelog
 
-## 2026-03-14: Internal 3D Viewer Integration 🚀
+## 2026-03-14: Internal 3D Viewer Integration & Persistent Settings 🚀
 
 ### 🎯 Summary
-Enhanced the User Experience (UX) by integrating a real-time 3D visualizer directly within the application. This removes the dependency on external windows for immediate project inspection.
+Enhanced the User Experience (UX) by integrating a real-time 3D visualizer directly within the application, removing dependency on external windows for immediate project inspection. Additionally, implemented robust persistent storage for application preferences and dynamic setting updates.
 
 ### ✨ New Features
+*   **⚙️ Persistent Settings & Dynamic Updates**:
+    *   Loading default values if the file does not exist.
+    *   Persistent storage of application preferences (e.g., `initial_directory`, `nerfstudio.method`).
+    *   Dynamic updating of values via the **Settings Tab** or Quick Settings dialog without restarting the application.
 *   **🌐 Embedded 3D Viewer**:
     *   Integrated **Three.js** via Flet's `WebView`.
     *   Interactive orbit controls (rotate, zoom, pan).
@@ -19,6 +23,7 @@ Enhanced the User Experience (UX) by integrating a real-time 3D visualizer direc
 *   **⚙️ Dedicated Settings Tab**:
     *   Moved global parameters (Voxel Size, Smoothing, etc.) to a separate **Settings** tab.
     *   Added **Initial Scan Directory** persistence, allowing users to save their preferred Quest storage path.
+    *   Integrated **NerfStudio Training Settings** (Method, Preset, Iterations) into the central configuration.
     *   Refactored the settings dialog into a responsive, dual-column layout.
 *   **🩺 Stability Fixes**:
     *   Resolved `TypeError` in `WebView` by removing unsupported event handlers in Flet 0.26.0.

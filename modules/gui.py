@@ -873,6 +873,12 @@ def main(page: ft.Page):
             # App Settings
             config_manager.set("app_settings.initial_directory", initial_dir_input.value)
             
+            # NerfStudio Settings
+            if 'nerfstudio_ui' in locals() or 'nerfstudio_ui' in globals():
+                config_manager.set("nerfstudio.max_iterations", int(nerfstudio_ui.iterations_input.value))
+                config_manager.set("nerfstudio.method", nerfstudio_ui.method_dropdown.value)
+                config_manager.set("nerfstudio.preset", nerfstudio_ui.preset_dropdown.value)
+            
             if page.dialog == settings_dialog:
                 page.close(settings_dialog)
             
@@ -914,6 +920,19 @@ def main(page: ft.Page):
         ],
     )
 
+    # ==== NerfStudio Integration ====
+    from .nerfstudio_gui import NerfStudioUI
+    from .help_gui import HelpUI
+    
+    nerfstudio_ui = NerfStudioUI(
+        page=page,
+        on_log=add_log,
+        temp_dir_getter=lambda: temp_dir,
+        config_manager=config_manager
+    )
+
+    help_ui = HelpUI(page=page)
+
     # Settings Tab Content
     settings_tab_content = ft.Container(
         padding=20,
@@ -935,6 +954,11 @@ def main(page: ft.Page):
                     smoothing_input,
                     decimation_input,
                     export_fmt_dropdown,
+                    ft.Divider(),
+                    ft.Text("Neural Rendering (NerfStudio)", size=18, weight="bold"),
+                    nerfstudio_ui.method_dropdown,
+                    nerfstudio_ui.preset_dropdown,
+                    nerfstudio_ui.iterations_input,
                     ft.Divider(),
                     ft.Text("Application Paths", size=18, weight="bold"),
                     ft.Row([
@@ -962,18 +986,6 @@ def main(page: ft.Page):
 
     def open_settings(e):
         page.open(settings_dialog)
-
-    # ==== NerfStudio Integration ====
-    from .nerfstudio_gui import NerfStudioUI
-    from .help_gui import HelpUI
-    
-    nerfstudio_ui = NerfStudioUI(
-        page=page,
-        on_log=add_log,
-        temp_dir_getter=lambda: temp_dir
-    )
-
-    help_ui = HelpUI(page=page)
 
     # Layout - Now with Tabs
     page.appbar = ft.AppBar(

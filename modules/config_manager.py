@@ -33,6 +33,11 @@ DEFAULT_CONFIG = {
     },
     "app_settings": {
         "initial_directory": "D:\\METAQUEST"
+    },
+    "nerfstudio": {
+        "method": "splatfacto",
+        "preset": "Balanced",
+        "max_iterations": 30000
     }
 }
 

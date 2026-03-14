@@ -19,10 +19,11 @@ from .nerfstudio_trainer import NerfStudioTrainer
 class NerfStudioUI:
     """Manages NerfStudio UI components and state."""
     
-    def __init__(self, page: ft.Page, on_log: Callable[[str], None], temp_dir_getter: Callable[[], str]):
+    def __init__(self, page: ft.Page, on_log: Callable[[str], None], temp_dir_getter: Callable[[], str], config_manager):
         self.page = page
         self.on_log = on_log
         self.temp_dir_getter = temp_dir_getter  # Function to get current scan path
+        self.config_manager = config_manager
         self.trainer = NerfStudioTrainer()
         self.is_installed = False
         self.installation_thread = None
@@ -151,7 +152,7 @@ class NerfStudioUI:
         # ====== Training Configuration ======
         self.method_dropdown = ft.Dropdown(
             label="Training Method",
-            value="splatfacto",
+            value=self.config_manager.get("nerfstudio.method", "splatfacto"),
             options=[
                 ft.dropdown.Option("splatfacto", "⚡ Splatfacto (Gaussian Splatting) - Fast, Excellent"),
                 ft.dropdown.Option("nerfacto", "🎯 Nerfacto (NeRF) - Balanced"),
@@ -170,7 +171,7 @@ class NerfStudioUI:
 
         self.preset_dropdown = ft.Dropdown(
             label="Quality Preset",
-            value="Balanced",
+            value=self.config_manager.get("nerfstudio.preset", "Balanced"),
             options=[
                 ft.dropdown.Option("Fast", NerfStudioTrainer.PRESETS['Fast']['description']),
                 ft.dropdown.Option("Balanced", NerfStudioTrainer.PRESETS['Balanced']['description']),
@@ -182,7 +183,7 @@ class NerfStudioUI:
         
         self.iterations_input = ft.TextField(
             label="Max Iterations",
-            value="30000",
+            value=str(self.config_manager.get("nerfstudio.max_iterations", 30000)),
             width=150,
             keyboard_type=ft.KeyboardType.NUMBER
         )
@@ -406,6 +407,7 @@ class NerfStudioUI:
         """Update description when method changes."""
         method = e.control.value
         if method in NerfStudioTrainer.METHODS:
+            self.config_manager.set("nerfstudio.method", method)
             info = NerfStudioTrainer.METHODS[method]
             self.method_description.value = f"{info['description']} | Speed: {info['speed']}, Quality: {info['quality']}"
             self.page.update()
@@ -414,8 +416,10 @@ class NerfStudioUI:
         """Update training parameters based on preset."""
         preset = e.control.value
         if preset in NerfStudioTrainer.PRESETS:
+            self.config_manager.set("nerfstudio.preset", preset)
             config = NerfStudioTrainer.PRESETS[preset]
             self.iterations_input.value = str(config['max_iterations'])
+            self.config_manager.set("nerfstudio.max_iterations", config['max_iterations'])
             self.page.update()
     
     def _on_install_click(self, e):
