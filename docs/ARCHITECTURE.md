@@ -50,7 +50,8 @@ The application is divided into a UI layer and a logic layer (backend) that comm
 
 All parameters are stored in `config.yml`. `ConfigManager` enables:
 - Loading default values if the file does not exist.
-- Dynamic updating of values via the Settings dialog without restarting the application.
+- Persistent storage of application preferences (e.g., `initial_directory`).
+- Dynamic updating of values via the **Settings Tab** or Quick Settings dialog without restarting the application.
 
 ## 4. Error Handling
 

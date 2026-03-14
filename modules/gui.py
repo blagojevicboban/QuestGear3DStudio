@@ -244,11 +244,11 @@ def main(page: ft.Page):
     btn_load_zip = ft.ElevatedButton("Load ZIP", icon=ft.Icons.UPLOAD_FILE, on_click=lambda _: file_picker.pick_files(
         dialog_title="Open Quest Capture ZIP",
         allowed_extensions=["zip"],
-        initial_directory="D:\\METAQUEST" if os.path.exists("D:\\METAQUEST") else None
+        initial_directory=config_manager.get("app_settings.initial_directory") if os.path.exists(config_manager.get("app_settings.initial_directory", "")) else None
     ))
     btn_load_folder = ft.ElevatedButton("Load Folder", icon=ft.Icons.FOLDER_OPEN, on_click=lambda _: folder_picker.get_directory_path(
         dialog_title="Open Extracted Quest Data Folder",
-        initial_directory="D:\\METAQUEST" if os.path.exists("D:\\METAQUEST") else None
+        initial_directory=config_manager.get("app_settings.initial_directory") if os.path.exists(config_manager.get("app_settings.initial_directory", "")) else None
     ))
     
     def stop_zip_extraction(e):
@@ -832,12 +832,18 @@ def main(page: ft.Page):
     decimation_input = ft.TextField(label="Target Triangles", value=str(config_manager.get("post_processing.decimation_target_triangles", 100000)))
     export_fmt_dropdown = ft.Dropdown(
         label="Export Format",
-        value=config_manager.get("export.format", "obj"),
+        value=config_manager.get("export.format", "glb"),
         options=[
             ft.dropdown.Option("ply", "PLY (Standard)"),
             ft.dropdown.Option("obj", "OBJ (Universal)"),
             ft.dropdown.Option("glb", "GLB (Web/AR)"),
         ]
+    )
+    
+    initial_dir_input = ft.TextField(
+        label="Initial Scan Directory", 
+        value=config_manager.get("app_settings.initial_directory", "D:\\METAQUEST"),
+        hint_text="e.g. D:\\METAQUEST or C:\\Users\\Name\\Documents"
     )
 
     def save_settings(e):
@@ -853,13 +859,18 @@ def main(page: ft.Page):
             config_manager.set("post_processing.decimation_target_triangles", int(decimation_input.value))
             config_manager.set("export.format", export_fmt_dropdown.value)
             
-            page.close(settings_dialog)
+            # App Settings
+            config_manager.set("app_settings.initial_directory", initial_dir_input.value)
+            
+            if page.dialog == settings_dialog:
+                page.close(settings_dialog)
+            
             show_msg("Settings saved")
         except ValueError:
             show_msg("Invalid numerical values")
 
     settings_dialog = ft.AlertDialog(
-        title=ft.Text("Settings"),
+        title=ft.Text("Quick Settings"),
         content=ft.Column([
             ft.Text("Reconstruction Parameters", weight="bold"),
             voxel_input, 
@@ -873,12 +884,52 @@ def main(page: ft.Page):
             decimation_input,
             ft.Divider(),
             ft.Text("Export", weight="bold"),
-            export_fmt_dropdown
+            export_fmt_dropdown,
+            ft.Divider(),
+            ft.Text("Application", weight="bold"),
+            initial_dir_input
         ], tight=True, scroll=ft.ScrollMode.AUTO),
         actions=[
             ft.TextButton("Cancel", on_click=lambda _: page.close(settings_dialog)),
             ft.TextButton("Save", on_click=save_settings),
         ],
+    )
+
+    # Settings Tab Content
+    settings_tab_content = ft.Container(
+        padding=20,
+        content=ft.Column([
+            ft.Text("Application Settings", size=24, weight="bold"),
+            ft.Text("Configure global parameters for reconstruction and UI behavior."),
+            ft.Divider(),
+            ft.ResponsiveRow([
+                ft.Column([
+                    ft.Text("Reconstruction Engine", size=18, weight="bold"),
+                    voxel_input,
+                    depth_max_input,
+                    frame_int_input,
+                    camera_dropdown,
+                    filter_check,
+                ], col={"sm": 12, "md": 6}),
+                ft.Column([
+                    ft.Text("Post-Processing & Export", size=18, weight="bold"),
+                    smoothing_input,
+                    decimation_input,
+                    export_fmt_dropdown,
+                    ft.Divider(),
+                    ft.Text("Application Paths", size=18, weight="bold"),
+                    initial_dir_input,
+                ], col={"sm": 12, "md": 6}),
+            ]),
+            ft.Row([
+                ft.ElevatedButton("Save All Settings", 
+                                icon=ft.Icons.SAVE, 
+                                bgcolor=ft.Colors.BLUE_700,
+                                color=ft.Colors.WHITE,
+                                on_click=save_settings),
+                ft.TextButton("Reset to Defaults", on_click=lambda _: show_msg("Reset not implemented yet"))
+            ], alignment=ft.MainAxisAlignment.CENTER, height=80)
+        ], scroll=ft.ScrollMode.AUTO)
     )
 
     def open_settings(e):
@@ -978,6 +1029,11 @@ def main(page: ft.Page):
                 text="TSDF Reconstruction",
                 icon=ft.Icons.VIEW_IN_AR,
                 content=tsdf_tab_content
+            ),
+            ft.Tab(
+                text="Settings",
+                icon=ft.Icons.SETTINGS,
+                content=settings_tab_content
             ),
             nerfstudio_ui.get_tab(),
             help_ui.get_tab(),

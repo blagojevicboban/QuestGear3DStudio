@@ -30,6 +30,9 @@ DEFAULT_CONFIG = {
         "format": "glb",  # ply, obj, glb
         "save_mesh": True,
         "save_pointcloud": False,
+    },
+    "app_settings": {
+        "initial_directory": "D:\\METAQUEST"
     }
 }
 
