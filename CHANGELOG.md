@@ -1,6 +1,5 @@
 # QuestGear3DStudio - Changelog
-
-## 2026-03-14: Internal 3D Viewer Integration & Persistent Settings 🚀
+## [2.3.0] - 2026-03-14: The Multi-Scan & AI Enhancement Update 🏘️🚀
 
 ### 🎯 Summary
 Enhanced the User Experience (UX) by integrating a real-time 3D visualizer directly within the application, removing dependency on external windows for immediate project inspection. Additionally, implemented robust persistent storage for application preferences and dynamic setting updates.

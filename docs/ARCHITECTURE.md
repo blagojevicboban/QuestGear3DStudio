@@ -36,10 +36,11 @@ The application is divided into a UI layer and a logic layer (backend) that comm
 
 ## 2. Data Flow
 
-1. **User selects ZIP** -> `FilePicker` in the GUI.
-2. **Validation** -> `ZipValidator` checks CRC and structure.
-3. **Extraction** -> `AsyncExtractor` extracts files to `_extracted` folder next to the zip (or system tmp previously).
-4. **Launch Reconstruction**:
+1. **User selects ZIP(s)/Folder(s)** -> `FilePicker` in the GUI. Supports multi-selection for **Multi-Scan Merging**.
+2. **Validation** -> `ZipValidator` checks CRC and structure for each project.
+3. **Extraction** -> `AsyncExtractor` extracts files sequentially to `_extracted` folders.
+4. **Aggregate Data**: `QuestReconstructionPipeline` collects frames and camera metadata from all selected project directories.
+5. **Launch Reconstruction**:
     - `ReconstructionThread` reads `frames.json`.
     - For each frame:
         - Read BIN/YUV file -> `yuv_to_rgb`.
