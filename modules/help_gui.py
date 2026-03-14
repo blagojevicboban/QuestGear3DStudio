@@ -31,7 +31,19 @@ class HelpUI:
             "q3_subtitle": "Installation troubleshooting",
             "q3_content": "Make sure you have the latest NVIDIA drivers and Visual Studio Redistributable installed. Check the logs at the bottom of the app for specific errors during installation.",
             "credits": "2026 QuestGear 3D Suite | Developed by Mejkerslab",
-            "version": "Version 2.1.0-stable"
+            "version": "Version 2.2.0-stable",
+            "step0_title": "🚀 New: Settings & Directory",
+            "step0_content": "Go to the 'Settings' tab to set your default scan path. Use the 'Browse' button to select where your Quest saves data. Click 'Save All Settings' to persist this for future sessions.",
+            "step_viewer_title": "🎮 Integrated 3D Viewer",
+            "step_viewer_content": "After reconstruction, the model loads automatically. Use the 'Switch to 2D/3D' button to compare frames with the 3D model. Rotate with Left Mouse, Pan with Right, and Zoom with Scroll.",
+            "params_title": "🔧 Parameter Guide",
+            "param_voxel": "• Voxel Size: 0.01 (high detail) to 0.05 (fast/rough).",
+            "param_depth": "• Max Depth: Set to 2-3m for indoor scans to avoid background noise.",
+            "param_interval": "• Frame Interval: 1 (every frame) to 10 (faster, less overlap).",
+            "best_practices_title": "💡 Best Practices",
+            "bp1": "1. Move slowly and steadily during the scan.",
+            "bp2": "2. Ensure bright, even lighting throughout the room.",
+            "bp3": "3. Scan the object from multiple heights and angles."
         },
         "sr": {
             "tab_title": "Pomoć",
@@ -55,7 +67,19 @@ class HelpUI:
             "q3_subtitle": "Rešavanje problema sa instalacijom",
             "q3_content": "Uverite se da imate instalirane najnovije NVIDIA drajvere i Visual Studio Redistributable. Proverite logove u donjem delu aplikacije za specifične greške tokom instalacije.",
             "credits": "2026 QuestGear 3D Suite | Razvijeno od strane Mejkerslab-a",
-            "version": "Verzija 2.1.0-stable"
+            "version": "Verzija 2.2.0-stable",
+            "step0_title": "🚀 Novo: Podešavanja i Direktorijumi",
+            "step0_content": "Idite na 'Settings' tab da postavite podrazumevanu putanju za skenove. Koristite 'Browse' dugme da izaberete gde Quest čuva podatke. Kliknite 'Save All Settings' da zapamtite ovo za buduće sesije.",
+            "step_viewer_title": "🎮 Integrisani 3D Viewer",
+            "step_viewer_content": "Nakon rekonstrukcije, model se učitava automatski. Koristite 'Switch to 2D/3D' dugme za poređenje frejmova i modela. Rotacija: Levi klik, Pan: Desni klik, Zoom: Scroll.",
+            "params_title": "🔧 Vodič kroz Parametre",
+            "param_voxel": "• Voxel Size: 0.01 (visoki detalji) do 0.05 (brzo/grubo).",
+            "param_depth": "• Max Depth: Postavite na 2-3m za unutrašnje skenove da izbegnete šum.",
+            "param_interval": "• Frame Interval: 1 (svaki frejm) do 10 (brže, manje preklapanja).",
+            "best_practices_title": "💡 Saveti za Bolji Sken",
+            "bp1": "1. Krećite se polako i ujednačeno tokom skeniranja.",
+            "bp2": "2. Obezbedite jako i ravnomerno osvetljenje u prostoriji.",
+            "bp3": "3. Skenirajte objekat sa različitih visina i uglova."
         }
     }
     
@@ -129,8 +153,42 @@ class HelpUI:
         )
         
         self.container.controls.append(self.get_help_section(t["step1_title"], t["step1_content"], ft.Icons.FILE_DOWNLOAD))
+        self.container.controls.append(self.get_help_section(t["step0_title"], t["step0_content"], ft.Icons.SETTINGS_SUGGEST))
         self.container.controls.append(self.get_help_section(t["step2_title"], t["step2_content"], ft.Icons.LAYERS))
+        self.container.controls.append(self.get_help_section(t["step_viewer_title"], t["step_viewer_content"], ft.Icons.VIEW_IN_AR))
         self.container.controls.append(self.get_help_section(t["step3_title"], t["step3_content"], ft.Icons.AUTO_AWESOME))
+
+        # Parameter Details
+        self.container.controls.append(
+            ft.Container(
+                content=ft.Column([
+                    ft.Text(t["params_title"], size=18, weight="bold"),
+                    ft.Text(t["param_voxel"], size=13),
+                    ft.Text(t["param_depth"], size=13),
+                    ft.Text(t["param_interval"], size=13),
+                ]),
+                padding=15,
+                bgcolor="#1a2b3c",
+                border_radius=10,
+                margin=ft.margin.only(bottom=15)
+            )
+        )
+
+        # Best Practices
+        self.container.controls.append(
+            ft.Container(
+                content=ft.Column([
+                    ft.Text(t["best_practices_title"], size=18, weight="bold", color=ft.Colors.AMBER_200),
+                    ft.Text(t["bp1"], size=13),
+                    ft.Text(t["bp2"], size=13),
+                    ft.Text(t["bp3"], size=13),
+                ]),
+                padding=15,
+                bgcolor="#3e2c1a",
+                border_radius=10,
+                margin=ft.margin.only(bottom=15)
+            )
+        )
 
         self.container.controls.append(ft.Divider(height=40))
         
