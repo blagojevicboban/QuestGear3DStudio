@@ -31,9 +31,11 @@ class HelpUI:
             "q3_subtitle": "Installation troubleshooting",
             "q3_content": "Make sure you have the latest NVIDIA drivers and Visual Studio Redistributable installed. Check the logs at the bottom of the app for specific errors during installation.",
             "credits": "2026 QuestGear 3D Suite | Developed by Mejkerslab",
-            "version": "Version 2.2.0-stable",
+            "version": "Version 2.3.0-stable",
             "step0_title": "🚀 New: Settings & Directory",
             "step0_content": "Go to the 'Settings' tab to set your default scan path. Use the 'Browse' button to select where your Quest saves data. Click 'Save All Settings' to persist this for future sessions.",
+            "step_merging_title": "🏘️ Multi-Scan Merging",
+            "step_merging_content": "Combine multiple scans into one scene.\n• Select multiple ZIPs in the file picker to extract them sequentially.\n• Use 'Load Folder(s)' multiple times to add directories additively.\n• The system will aggregate all frames and reconstruct them as a single large model.",
             "step_viewer_title": "🎮 Integrated 3D Viewer",
             "step_viewer_content": "After reconstruction, the model loads automatically. Use the 'Switch to 2D/3D' button to compare frames with the 3D model. Rotate with Left Mouse, Pan with Right, and Zoom with Scroll.",
             "params_title": "🔧 Parameter Guide",
@@ -67,9 +69,11 @@ class HelpUI:
             "q3_subtitle": "Rešavanje problema sa instalacijom",
             "q3_content": "Uverite se da imate instalirane najnovije NVIDIA drajvere i Visual Studio Redistributable. Proverite logove u donjem delu aplikacije za specifične greške tokom instalacije.",
             "credits": "2026 QuestGear 3D Suite | Razvijeno od strane Mejkerslab-a",
-            "version": "Verzija 2.2.0-stable",
+            "version": "Verzija 2.3.0-stable",
             "step0_title": "🚀 Novo: Podešavanja i Direktorijumi",
             "step0_content": "Idite na 'Settings' tab da postavite podrazumevanu putanju za skenove. Koristite 'Browse' dugme da izaberete gde Quest čuva podatke. Kliknite 'Save All Settings' da zapamtite ovo za buduće sesije.",
+            "step_merging_title": "🏘️ Spajanje više skenova (Merging)",
+            "step_merging_content": "Spojite više odvojenih snimaka u jednu veliku scenu.\n• Izaberite više ZIP datoteka odjednom da biste ih sekvencijalno raspakovali.\n• Koristite 'Load Folder(s)' više puta da biste aditivno dodavali foldere.\n• Sistem će agregirati sve frejmove i rekonstruisati ih kao jedan master model.",
             "step_viewer_title": "🎮 Integrisani 3D Viewer",
             "step_viewer_content": "Nakon rekonstrukcije, model se učitava automatski. Koristite 'Switch to 2D/3D' dugme za poređenje frejmova i modela. Rotacija: Levi klik, Pan: Desni klik, Zoom: Scroll.",
             "params_title": "🔧 Vodič kroz Parametre",
@@ -154,6 +158,7 @@ class HelpUI:
         
         self.container.controls.append(self.get_help_section(t["step1_title"], t["step1_content"], ft.Icons.FILE_DOWNLOAD))
         self.container.controls.append(self.get_help_section(t["step0_title"], t["step0_content"], ft.Icons.SETTINGS_SUGGEST))
+        self.container.controls.append(self.get_help_section(t["step_merging_title"], t["step_merging_content"], ft.Icons.MAP))
         self.container.controls.append(self.get_help_section(t["step2_title"], t["step2_content"], ft.Icons.LAYERS))
         self.container.controls.append(self.get_help_section(t["step_viewer_title"], t["step_viewer_content"], ft.Icons.VIEW_IN_AR))
         self.container.controls.append(self.get_help_section(t["step3_title"], t["step3_content"], ft.Icons.AUTO_AWESOME))
