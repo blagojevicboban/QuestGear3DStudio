@@ -525,6 +525,7 @@ def main(page: ft.Page):
     file_picker = ft.FilePicker(on_result=on_file_result)
     folder_picker = ft.FilePicker(on_result=on_folder_result)
     settings_folder_picker = ft.FilePicker(on_result=lambda e: (setattr(initial_dir_input, "value", e.path), page.update()) if e.path else None)
+    msvc_folder_picker = ft.FilePicker(on_result=lambda e: (setattr(msvc_path_input, "value", e.path), page.update()) if e.path else None)
 
     format_dropdown_start = ft.Dropdown(
         label="Select Export Format",
@@ -592,7 +593,7 @@ def main(page: ft.Page):
         actions_alignment=ft.MainAxisAlignment.END,
     )
 
-    page.overlay.extend([file_picker, folder_picker, settings_folder_picker, reconstruct_format_dialog])
+    page.overlay.extend([file_picker, folder_picker, settings_folder_picker, msvc_folder_picker, reconstruct_format_dialog])
 
     # Assign Handlers to buttons defined at top
     btn_load_zip.on_click = lambda _: file_picker.pick_files(
@@ -869,6 +870,31 @@ def main(page: ft.Page):
         hint_text="e.g. D:\\METAQUEST or C:\\Users\\Name\\Documents",
         expand=True
     )
+    
+    msvc_path_input = ft.TextField(
+        label="MSVC Build Tools Path (Optional)", 
+        value=config_manager.get("app_settings.msvc_path", ""),
+        hint_text="e.g. C:\\Program Files\\Microsoft Visual Studio\\2022\\BuildTools",
+        expand=True,
+        tooltip="Root directory of your Visual Studio installation. Leave empty for auto-detection."
+    )
+    
+    def on_msvc_browse(e):
+        def on_result(res: ft.FilePickerResultEvent):
+            if res.path:
+                msvc_path_input.value = res.path
+                msvc_path_input.update()
+        
+        picker = ft.FilePicker(on_result=on_result)
+        page.overlay.append(picker)
+        page.update()
+        picker.get_directory_path()
+
+    btn_browse_msvc = ft.IconButton(
+        icon=ft.Icons.FOLDER_OPEN,
+        on_click=on_msvc_browse,
+        tooltip="Browse for BuildTools folder"
+    )
 
     def save_settings(e):
         try:
@@ -893,6 +919,7 @@ def main(page: ft.Page):
             
             # App Settings
             config_manager.set("app_settings.initial_directory", initial_dir_input.value)
+            config_manager.set("app_settings.msvc_path", msvc_path_input.value)
             
             # NerfStudio Settings
             if 'nerfstudio_ui' in locals() or 'nerfstudio_ui' in globals():
@@ -954,6 +981,7 @@ def main(page: ft.Page):
                     nerfstudio_ui.iterations_input,
                     ft.Divider(),
                     ft.Text("Application Paths", size=18, weight="bold"),
+                    ft.Text("Initial Scan Directory:"),
                     ft.Row([
                         initial_dir_input,
                         ft.IconButton(
@@ -961,6 +989,17 @@ def main(page: ft.Page):
                             tooltip="Browse Directory",
                             on_click=lambda _: settings_folder_picker.get_directory_path(
                                 initial_directory=initial_dir_input.value if os.path.exists(initial_dir_input.value) else None
+                            )
+                        )
+                    ]),
+                    ft.Text("Visual Studio Build Tools Path (Optional):"),
+                    ft.Row([
+                        msvc_path_input,
+                        ft.IconButton(
+                            icon=ft.Icons.FOLDER_OPEN,
+                            tooltip="Browse BuildTools folder",
+                            on_click=lambda _: msvc_folder_picker.get_directory_path(
+                                initial_directory=msvc_path_input.value if os.path.exists(msvc_path_input.value) else "C:\\Program Files\\Microsoft Visual Studio"
                             )
                         )
                     ])

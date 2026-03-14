@@ -1,19 +1,34 @@
+app_settings:
+  initial_directory: D:\METAQUEST
+  msvc_path: C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Tools\MSVC\14.50.35717\bin\Hostx86\x64
 export:
+  enable_texturing: true
   format: glb
   save_mesh: true
   save_pointcloud: false
+  texture_size: 2048
 ingestion:
   validation_checksum: true
+nerfstudio:
+  max_iterations: 15000
+  method: splatfacto
+  preset: Balanced
 post_processing:
   decimation_target_triangles: 100000
+  enable_poisson: false
+  poisson_depth: 8
   smoothing_iterations: 5
 reconstruction:
+  acceleration_backend: auto
   block_count: 50000
   block_resolution: 16
   camera: color
   confidence_threshold: 0.05
   depth_max: 3.0
+  enable_drift_correction: true
+  enable_inpainting: false
   frame_interval: 1
+  refinement_method: gicp
   trunc_voxel_multiplier: 8.0
   use_confidence_filtered_depth: false
   valid_count_threshold: 4

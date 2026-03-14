@@ -850,7 +850,10 @@ class NerfStudioUI:
         if psnr is not None:
             self.psnr_text.value = f"PSNR: {psnr:.2f} dB"
         
-        self.page.update()
+        try:
+            self.page.update()
+        except:
+            pass
     
     def _on_training_complete(self, success: bool, output_path: str):
         """Handle training completion."""
@@ -884,7 +887,10 @@ class NerfStudioUI:
                 self._update_batch_list()
                 self._start_next_batch_job()
         
-        self.page.update()
+        try:
+            self.page.update()
+        except:
+            pass
     
     def _on_open_viewer(self, e):
         """Open NerfStudio viewer."""
@@ -901,7 +907,10 @@ class NerfStudioUI:
         """Show snackbar message."""
         self.page.snack_bar = ft.SnackBar(content=ft.Text(text))
         self.page.snack_bar.open = True
-        self.page.update()
+        try:
+            self.page.update()
+        except:
+            pass
 
     def _on_add_batch(self, e):
         """Add current configuration to batch queue."""
@@ -940,7 +949,10 @@ class NerfStudioUI:
             )
         
         self.btn_start_batch.disabled = len(self.batch_queue) == 0 or self.is_batch_processing
-        self.page.update()
+        try:
+            self.page.update()
+        except:
+            pass
 
     def _on_start_batch(self, e):
         """Start batch processing."""
