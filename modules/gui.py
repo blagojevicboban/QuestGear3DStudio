@@ -634,7 +634,17 @@ def main(page: ft.Page):
 
     folder_picker = ft.FilePicker()
     folder_picker.on_result = load_folder_result
+    
+    def on_settings_folder_result(e: ft.FilePickerResultEvent):
+        if e.path:
+            initial_dir_input.value = e.path
+            initial_dir_input.update()
+
+    settings_folder_picker = ft.FilePicker()
+    settings_folder_picker.on_result = on_settings_folder_result
+    
     page.overlay.append(folder_picker)
+    page.overlay.append(settings_folder_picker)
 
     def stop_reconstruction(e):
         if thread:
@@ -843,7 +853,8 @@ def main(page: ft.Page):
     initial_dir_input = ft.TextField(
         label="Initial Scan Directory", 
         value=config_manager.get("app_settings.initial_directory", "D:\\METAQUEST"),
-        hint_text="e.g. D:\\METAQUEST or C:\\Users\\Name\\Documents"
+        hint_text="e.g. D:\\METAQUEST or C:\\Users\\Name\\Documents",
+        expand=True
     )
 
     def save_settings(e):
@@ -887,7 +898,15 @@ def main(page: ft.Page):
             export_fmt_dropdown,
             ft.Divider(),
             ft.Text("Application", weight="bold"),
-            initial_dir_input
+            ft.Row([
+                initial_dir_input,
+                ft.IconButton(
+                    icon=ft.Icons.FOLDER_OPEN,
+                    on_click=lambda _: settings_folder_picker.get_directory_path(
+                        initial_directory=initial_dir_input.value if os.path.exists(initial_dir_input.value) else None
+                    )
+                )
+            ])
         ], tight=True, scroll=ft.ScrollMode.AUTO),
         actions=[
             ft.TextButton("Cancel", on_click=lambda _: page.close(settings_dialog)),
@@ -918,7 +937,16 @@ def main(page: ft.Page):
                     export_fmt_dropdown,
                     ft.Divider(),
                     ft.Text("Application Paths", size=18, weight="bold"),
-                    initial_dir_input,
+                    ft.Row([
+                        initial_dir_input,
+                        ft.IconButton(
+                            icon=ft.Icons.FOLDER_OPEN,
+                            tooltip="Browse Directory",
+                            on_click=lambda _: settings_folder_picker.get_directory_path(
+                                initial_directory=initial_dir_input.value if os.path.exists(initial_dir_input.value) else None
+                            )
+                        )
+                    ])
                 ], col={"sm": 12, "md": 6}),
             ]),
             ft.Row([
