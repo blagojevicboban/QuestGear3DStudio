@@ -310,10 +310,17 @@ def main(page: ft.Page):
     
     def update_memory_loop():
         while True:
-            if page.route: # Check if page is active
-                mem = get_memory_usage()
-                mem_text.value = f"RAM: {mem:.1f} MB"
-                page.update()
+            try:
+                # Check if session is still valid
+                if page.session_id:
+                    mem = get_memory_usage()
+                    mem_text.value = f"RAM: {mem:.1f} MB"
+                    page.update()
+                else:
+                    break
+            except Exception:
+                # Event loop closed or session lost
+                break
             time.sleep(2)
             
     threading.Thread(target=update_memory_loop, daemon=True).start()
@@ -658,9 +665,7 @@ def main(page: ft.Page):
     # Internal 3D Viewer Control
     viewer_3d = ft.WebView(
         expand=True,
-        visible=False,
-        on_error=lambda e: add_log(f"WebView Error: {e.data}"),
-        on_page_event=lambda e: add_log(f"WebView Event: {e.data}")
+        visible=False
     )
 
     def update_internal_viewer(glb_path):

@@ -16,6 +16,9 @@ Enhanced the User Experience (UX) by integrating a real-time 3D visualizer direc
 *   **🎛️ Dual-View Interface**:
     *   New toggle system to switch between **2D Frame Preview** and **3D Visualizer**.
     *   Updated the central panel to expand dynamically during 3D inspection.
+*   **🩺 Stability Fixes**:
+    *   Resolved `TypeError` in `WebView` by removing unsupported event handlers in Flet 0.26.0.
+    *   Fixed `RuntimeError` in memory monitor thread by adding session validation and safe disposal on app exit.
 
 ## 2026-03-14: CI/CD Reliability & Test Suite Optimization 🛠️
 
