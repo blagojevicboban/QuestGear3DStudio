@@ -1,5 +1,41 @@
 # QuestGear3DStudio - Changelog
 
+## 2026-03-14: Internal 3D Viewer Integration 🚀
+
+### 🎯 Summary
+Enhanced the User Experience (UX) by integrating a real-time 3D visualizer directly within the application. This removes the dependency on external windows for immediate project inspection.
+
+### ✨ New Features
+*   **🌐 Embedded 3D Viewer**:
+    *   Integrated **Three.js** via Flet's `WebView`.
+    *   Interactive orbit controls (rotate, zoom, pan).
+    *   Grid helper and dynamic lighting for better spatial orientation.
+*   **🔄 Automatic Model Loading**:
+    *   Reconstructed scans are automatically exported to **GLB** and loaded into the viewer.
+    *   Cache-busting logic ensures the latest scan is always displayed.
+*   **🎛️ Dual-View Interface**:
+    *   New toggle system to switch between **2D Frame Preview** and **3D Visualizer**.
+    *   Updated the central panel to expand dynamically during 3D inspection.
+
+## 2026-03-14: CI/CD Reliability & Test Suite Optimization 🛠️
+
+### 🎯 Summary
+Significant infrastructure update focusing on development workflow, automated testing, and CI pipeline stability. Resolved modern Linux compatibility issues and fixed non-deterministic test failures.
+
+### ✨ Improvements & Bug Fixes
+*   **🚀 CI Pipeline Fixes**:
+    *   Migrated from deprecated `libgl1-mesa-glx` to modern `libgl1` in GitHub Actions.
+    *   Fixed `flake8` linting errors related to unused `nonlocal` declarations in the GUI module.
+    *   Integrated automated spell-checking for technical terms (libgl, xorg, pytest) in the developer environment.
+*   **🧪 Test Suite Robustness**:
+    *   **Config Isolation**: Fixed a critical memory-leak bug where tests shared configuration state. `ConfigManager` now uses `copy.deepcopy` for independent instance data.
+    *   **Crash Prevention**: Added safety guards to `QuestReconstructor` to prevent Open3D crashes when extracting meshes/point clouds from empty volumes.
+    *   **API Alignment**: Updated test suite to match the latest default configuration (OBJ format) and refined validation messages.
+*   **🧩 Architecture Legacy Support**:
+    *   Maintained backward compatibility with older tests by adding `.volume` alias to the `VoxelBlockGrid` implementation.
+
+---
+
 ## 2026-02-16: Phase 2 - Depth Improvements & Features 🚀
 
 ### 🎯 Summary

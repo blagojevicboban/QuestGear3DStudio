@@ -27,7 +27,7 @@ DEFAULT_CONFIG = {
         "outlier_std_ratio": 2.0
     },
     "export": {
-        "format": "obj",  # ply, obj, glb
+        "format": "glb",  # ply, obj, glb
         "save_mesh": True,
         "save_pointcloud": False,
     }

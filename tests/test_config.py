@@ -27,7 +27,7 @@ class TestConfigManager(unittest.TestCase):
         self.assertEqual(cm2.get("reconstruction.voxel_size"), 0.05)
 
     def test_nested_get(self):
-        self.assertEqual(self.cm.get("export.format"), "obj")
+        self.assertEqual(self.cm.get("export.format"), "glb")
         self.assertIsNone(self.cm.get("non.existent.key"))
 
 if __name__ == '__main__':

@@ -7,6 +7,8 @@ import os
 import json
 import threading
 import time
+import shutil
+from pathlib import Path
 import numpy as np
 import flet as ft
 from datetime import datetime
@@ -653,6 +655,46 @@ def main(page: ft.Page):
 
     thumb_img = ft.Image(src="placeholder.png", width=320, height=240, fit=ft.ImageFit.CONTAIN, visible=False)
     
+    # Internal 3D Viewer Control
+    viewer_3d = ft.WebView(
+        expand=True,
+        visible=False,
+        on_error=lambda e: add_log(f"WebView Error: {e.data}"),
+        on_page_event=lambda e: add_log(f"WebView Event: {e.data}")
+    )
+
+    def update_internal_viewer(glb_path):
+        """Copies the GLB to assets and refreshes the internal 3D viewer."""
+        try:
+            if not glb_path or not os.path.exists(glb_path):
+                return
+            
+            # Ensure assets directory exists
+            assets_dir = Path("assets")
+            assets_dir.mkdir(exist_ok=True)
+            
+            # Copy model to assets for serving
+            target_path = assets_dir / "current_model.glb"
+            shutil.copy2(glb_path, target_path)
+            
+            # Set URL with cache buster
+            viewer_url = f"/viewer.html?model=current_model.glb&t={time.time()}"
+            viewer_3d.url = viewer_url
+            viewer_3d.visible = True
+            
+            # Switch view modes
+            preview_img.visible = False
+            viewer_3d.visible = True
+            btn_toggle_view.visible = True
+            btn_toggle_view.text = "Switch to 2D Preview"
+            frame_range_slider.visible = False
+            frame_range_label.visible = False
+            
+            add_log("🚀 3D Model loaded in internal viewer")
+            page.update()
+        except Exception as ex:
+            add_log(f"Internal Viewer Error: {ex}")
+
     def on_reconstruct_finished(result):
         nonlocal current_mesh
         current_mesh = result.get('mesh')
@@ -704,6 +746,10 @@ def main(page: ft.Page):
                 # Force reload by adding timestamp
                 thumb_img.src = f"{thumb_path}?t={time.time()}" 
                 thumb_img.visible = True
+        
+        # Load in Internal 3D Viewer if GLB is available
+        if full_path and full_path.lower().endswith('.glb'):
+            update_internal_viewer(full_path)
         
         page.update()
 
@@ -867,8 +913,27 @@ def main(page: ft.Page):
             ]),
             video_container := ft.Container(
                 content=ft.Column([
-                    ft.Text("Video Track & Cropping:", weight="bold"),
-                    preview_img,
+                    ft.Row([
+                        ft.Text("Visualizer & Frames:", weight="bold"),
+                        ft.VerticalDivider(),
+                        btn_toggle_view := ft.TextButton(
+                            "Switch to 2D Preview", 
+                            icon=ft.Icons.IMAGE, 
+                            visible=False,
+                            on_click=lambda _: (
+                                setattr(preview_img, "visible", not preview_img.visible),
+                                setattr(viewer_3d, "visible", not viewer_3d.visible),
+                                setattr(frame_range_slider, "visible", preview_img.visible),
+                                setattr(frame_range_label, "visible", preview_img.visible),
+                                setattr(btn_toggle_view, "text", "Switch to 3D View" if viewer_3d.visible else "Switch to 2D Preview"),
+                                page.update()
+                            )
+                        )
+                    ]),
+                    ft.Stack([
+                        preview_img,
+                        viewer_3d,
+                    ], expand=True),
                     ft.Stack([
                         frame_range_slider,
                         ft.TransparentPointer(current_frame_indicator)
@@ -876,10 +941,10 @@ def main(page: ft.Page):
                     frame_range_label
                 ]),
                 padding=10,
-                bgcolor="#252525",
+                bgcolor="#151515",
                 border_radius=10,
-                height=300,
-                animate_size=None
+                height=400,
+                animate_size=300
             ),
             splitter,
             progress_bar,
