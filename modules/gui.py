@@ -466,71 +466,7 @@ def main(page: ft.Page):
             on_error=on_img_load_error,
             on_log=add_log
         )
-        current_extractor.start()
-
-    def load_zip_result(e):
-        nonlocal pending_zip_path
-        if e.files and len(e.files) > 0:
-            file_path = e.files[0].path
-            log_list.controls.clear()
-            add_log(f"Selected file: {file_path}")
-            
-            # Check if extracted folder already exists
-            zip_dir = os.path.dirname(file_path)
-            zip_name = os.path.splitext(os.path.basename(file_path))[0]
-            target_extracted_dir = os.path.join(zip_dir, f"{zip_name}_extracted")
-            
-            if os.path.exists(target_extracted_dir):
-                pending_zip_path = file_path
-                overwrite_msg.value = f"Folder '{os.path.basename(target_extracted_dir)}' already exists.\nDo you want to overwrite it?"
-                page.open(confirm_dialog)
-                return
-
-            status_text.value = "Validating ZIP structure..."
-            btn_load_zip.disabled = True
-            btn_load_folder.disabled = True
-            page.update()
-            
-            add_log("Starting ZIP validation...")
-            valid, msg = ZipValidator.validate(file_path, log_callback=add_log)
-            if not valid:
-                status_text.value = "Invalid ZIP"
-                btn_load_zip.disabled = False
-                btn_load_folder.disabled = False
-                show_msg(f"Invalid ZIP: {msg}")
-                add_log(f"Validation FAILED: {msg}")
-                return
-
-            execute_extraction(file_path)
-
-    def handle_confirm_overwrite(e):
-        nonlocal pending_zip_path
-        page.close(confirm_dialog)
-        if pending_zip_path:
-            # Re-run the validation and extraction logic
-            status_text.value = "Validating ZIP structure..."
-            btn_load_zip.disabled = True
-            btn_load_folder.disabled = True
-            page.update()
-            
-            add_log("Starting ZIP validation (after confirmation)...")
-            valid, msg = ZipValidator.validate(pending_zip_path, log_callback=add_log)
-            if not valid:
-                status_text.value = "Invalid ZIP"
-                btn_load_zip.disabled = False
-                btn_load_folder.disabled = False
-                show_msg(f"Invalid ZIP: {msg}")
-                return
-                
-            execute_extraction(pending_zip_path)
-            pending_zip_path = None
-
-    def handle_cancel_overwrite(e):
-        nonlocal pending_zip_path
-        pending_zip_path = None
-        page.close(confirm_dialog)
-        status_text.value = "Extraction cancelled"
-        page.update()
+        current_extractor.start() # Combined load_zip_result logic moved to on_file_result/start_extraction
 
     # --- Dialogs and Pickers ---
     
@@ -645,24 +581,14 @@ def main(page: ft.Page):
         actions_alignment=ft.MainAxisAlignment.END,
     )
 
-    overwrite_msg = ft.Text("")
-    confirm_dialog = ft.AlertDialog(
-        modal=True,
-        title=ft.Text("Folder Exists"),
-        content=overwrite_msg,
-        actions=[
-            ft.TextButton("Yes, Overwrite", on_click=handle_confirm_overwrite),
-            ft.TextButton("No, Cancel", on_click=handle_cancel_overwrite),
-        ],
-        actions_alignment=ft.MainAxisAlignment.END,
-    )
+    # Combined load_zip_result logic moved to on_file_result/start_extraction
 
     # File Pickers
     file_picker = ft.FilePicker(on_result=on_file_result)
     folder_picker = ft.FilePicker(on_result=on_folder_result)
     settings_folder_picker = ft.FilePicker(on_result=lambda e: (setattr(initial_dir_input, "value", e.path), page.update()) if e.path else None)
     
-    page.overlay.extend([file_picker, folder_picker, settings_folder_picker, confirm_dialog, reconstruct_format_dialog])
+    page.overlay.extend([file_picker, folder_picker, settings_folder_picker, reconstruct_format_dialog])
 
     def on_file_result(e: ft.FilePickerResultEvent):
         nonlocal pending_zip_paths, temp_dirs, frames_data
@@ -716,7 +642,6 @@ def main(page: ft.Page):
         file_picker, 
         folder_picker, 
         settings_folder_picker, 
-        confirm_dialog, 
         reconstruct_format_dialog
     ])
 
