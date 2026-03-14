@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import flet as ft
 from datetime import datetime
+import webbrowser
 
 try:
     import open3d as o3d
@@ -1057,21 +1058,20 @@ def main(page: ft.Page):
         expand=True
     )
 
-    # Header with Logo
-    app_header = ft.Container(
-        padding=ft.padding.only(left=20, top=10, bottom=5, right=20),
-        bgcolor="#111111",
+    # Branding Overlay (Placed in the top-right of the Tabs bar)
+    branding_overlay = ft.Container(
+        padding=ft.padding.only(right=25, top=2),
         content=ft.Row([
-            ft.Image(src="logo.png", width=32, height=32, border_radius=5),
-            ft.Text("QuestGear 3D Studio", size=20, weight="bold", color=ft.Colors.BLUE_400),
-            ft.VerticalDivider(width=10),
-            ft.Text("Spatial Reconstruction Suite", size=12, color=ft.Colors.GREY_500),
-            ft.Container(expand=True), # Spacer
-            ft.Text("v2.1.0-alpha", size=10, color=ft.Colors.GREY_700),
-        ], vertical_alignment=ft.CrossAxisAlignment.CENTER)
+            ft.Image(src="logo.png", width=64, height=64, border_radius=10),
+            ft.Text("QuestGear 3D Studio", size=32, weight="bold", color=ft.Colors.BLUE_400),
+            ft.Text("v2.1", size=14, color=ft.Colors.GREY_700),
+        ], spacing=15, vertical_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.END),
     )
 
-    main_layout = ft.Column([app_header, tabs], expand=True, spacing=0)
+    main_layout = ft.Stack([
+        tabs,
+        branding_overlay # This will float on top of the tabs row on the right
+    ], expand=True)
 
     page.add(main_layout)
     
