@@ -664,6 +664,7 @@ def main(page: ft.Page):
     
     # Internal 3D Viewer Control
     viewer_3d = ft.WebView(
+        "about:blank", # Required positional argument in Flet 0.26.0
         expand=True,
         visible=False
     )
