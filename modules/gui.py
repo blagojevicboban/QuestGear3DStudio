@@ -873,7 +873,7 @@ def main(page: ft.Page):
                     preview_img,
                     ft.Stack([
                         frame_range_slider,
-                        ft.IgnorePointer(current_frame_indicator)
+                        ft.TransparentPointer(current_frame_indicator)
                     ], height=40),
                     frame_range_label
                 ]),
