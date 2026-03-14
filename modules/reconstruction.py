@@ -64,8 +64,11 @@ class QuestReconstructor:
                 block_count=self.block_count,
                 device=self.device
             )
+            # Alias for older tests/code
+            self.volume = self.vbg
         else:
             self.vbg = None
+            self.volume = None
 
     def integrate_frame(self, rgb_image, depth_image, intrinsics, pose):
         """
@@ -236,13 +239,15 @@ class QuestReconstructor:
         Extract triangle mesh from the TSDF volume.
         Returns a legacy Open3D mesh for compatibility.
         """
-        if not self.vbg:
-             class DummyMesh:
-                vertices = []
-             return DummyMesh()
+        if not self.vbg or self.vbg.hashmap().size() == 0:
+             return o3d.geometry.TriangleMesh()
             
         # Extract mesh (Tensor)
-        mesh_t = self.vbg.extract_triangle_mesh()
+        try:
+            mesh_t = self.vbg.extract_triangle_mesh()
+        except RuntimeError:
+            # Handle cases where hashmap size > 0 but it's still effectively empty/invalid for Open3D
+            return o3d.geometry.TriangleMesh()
         
         # Convert to legacy mesh for GUI compatibility and advanced post-processing
         # (Tensor API post-processing is faster but legacy has more features exposed in Python)
