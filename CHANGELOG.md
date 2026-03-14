@@ -1,4 +1,20 @@
 # QuestGear3DStudio - Changelog
+## [2.3.1] - 2026-03-14: Stability & GUI Refactoring Pass 🛠️
+### 🎯 Summary
+Critical maintenance update focused on resolving initialization race conditions and GUI binding errors introduced by the Multi-Scan architecture. Reorganized the entire `gui.py` module for predictable startup and reliable event handling.
+
+### 🩺 Stability & UX Fixes
+*   **🧩 GUI Binding Resolution**:
+    *   Resolved `UnboundLocalError` and `NameError: reconstruct_format_dialog` by restructuring initialization order.
+    *   Unified UI control creation at the top of the `main` loop to prevent circular dependencies.
+    *   Fixed `SyntaxError` related to `nonlocal` bindings in nested callback functions.
+*   **🏘️ Robust Multi-Scan Logic**:
+    *   Consolidated data aggregation logic into a single, predictable flow for ZIP and Folder loading.
+    *   Improved state management for `temp_dirs` and `frames_data` to ensure accurate stitching of multiple projects.
+*   **🌐 Internal Viewer Enhancements**:
+    *   Fixed GLB loading logic to point to the first project's asset directory if no global path is returned.
+    *   Integrated format-selector directly into the reconstruction flow for streamlined exporting.
+
 ## [2.3.0] - 2026-03-14: The Multi-Scan & AI Enhancement Update 🏘️🚀
 
 ### 🎯 Summary

@@ -83,6 +83,13 @@ When hardware depth is unavailable or poor quality:
 1. User clicks **"Generate Monocular Depth"** in Studio GUI.
 2. `monocular_depth.py` runs **MiDaS** inference on color frames.
 3. 16-bit depth PNGs are saved to `depth_monocular/`.
-4. `quest_adapter.py` detects this folder and overrides the original depth for training.
+### 🏘️ Multi-Scan Merging Architecture
+Introduced in v2.3.0 to support scanning large environments (e.g., entire apartments) room-by-room:
+1. **Selection**: User selects multiple ZIP captures or extracted folders.
+2. **Aggregation**: `gui.py` maintains a `temp_dirs` list and triggers `aggregate_frames()`.
+3. **Data Loading**: `QuestDataAdapter` processes each folder independently to ensure they have the standard `frames.json` manifest.
+4. **Pose Integration**: `QuestReconstructor` iterates through all aggregated frames. Poses remain in Quest's global coordinate system (HMD Tracking Space). 
+   - *Note*: Large-scale alignment depends on the Quest's internal SLAM remaining continuous between scans (walking from room to room).
+5. **Unified Reconstruction**: A single `VoxelBlockGrid` is initialized to encompass all frames, producing one master 3D model.
 
 ... [rest of architecture doc follows]
