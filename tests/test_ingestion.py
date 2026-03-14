@@ -38,7 +38,7 @@ class TestIngestion(unittest.TestCase):
 
         valid, msg = ZipValidator.validate(self.invalid_zip)
         self.assertFalse(valid, "Invalid zip passed")
-        self.assertIn("Missing required directories", msg)
+        self.assertIn("ZIP does not appear to contain Quest capture data", msg)
 
 if __name__ == '__main__':
     unittest.main()

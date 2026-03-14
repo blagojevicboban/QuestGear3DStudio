@@ -308,10 +308,11 @@ class QuestReconstructor:
         Extract point cloud from the TSDF volume.
         Returns a legacy Open3D point cloud.
         """
-        if not self.vbg:
-             class DummyPC:
-                points = []
-             return DummyPC()
+        if not self.vbg or self.vbg.hashmap().size() == 0:
+             return o3d.geometry.PointCloud()
              
-        pcd_t = self.vbg.extract_point_cloud()
-        return pcd_t.to_legacy()
+        try:
+            pcd_t = self.vbg.extract_point_cloud()
+            return pcd_t.to_legacy()
+        except RuntimeError:
+            return o3d.geometry.PointCloud()
