@@ -19,7 +19,7 @@ class TestReconstruction(unittest.TestCase):
 
     def test_initialization(self):
         self.assertIsNotNone(self.recon.volume)
-        self.assertEqual(self.recon.voxel_size, 0.01)
+        self.assertEqual(self.recon.voxel_size, 0.02)
 
     def test_integrate_dummy_frame(self):
         # Create dummy data

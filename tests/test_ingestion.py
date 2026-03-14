@@ -3,7 +3,7 @@ import os
 import unittest
 import zipfile
 import shutil
-from PyQt6.QtCore import QCoreApplication
+
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from modules.ingestion import ZipValidator
