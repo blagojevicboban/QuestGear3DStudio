@@ -238,7 +238,7 @@ def main(page: ft.Page):
     frame_range_slider.on_change = on_range_change
 
     btn_process = ft.ElevatedButton("Start Reconstruction", disabled=True)
-    btn_visualize = ft.ElevatedButton("Visualizer (External)", disabled=True)
+    btn_visualize = ft.ElevatedButton("Open External Window", icon=ft.Icons.OPEN_IN_NEW, disabled=True)
     
     # Selection buttons (declared here as variables so they can be disabled)
     btn_load_zip = ft.ElevatedButton("Load ZIP", icon=ft.Icons.UPLOAD_FILE, on_click=lambda _: file_picker.pick_files(
