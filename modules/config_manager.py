@@ -18,6 +18,7 @@ DEFAULT_CONFIG = {
         "refinement_method": "gicp", # icp, gicp
         "loop_closure_detection": True,
         "enable_inpainting": False, # AI Depth Inpainting (Slows down)
+        "acceleration_backend": "auto", # auto, cuda, directml, cpu
     },
     "ingestion": {
         "validation_checksum": True,

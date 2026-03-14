@@ -859,6 +859,18 @@ def main(page: ft.Page):
         tooltip="Uses MiDaS AI to fill holes in glossy surfaces. Note: Heavy on CPU/GPU."
     )
     
+    acceleration_backend_dropdown = ft.Dropdown(
+        label="Acceleration Backend",
+        value=config_manager.get("reconstruction.acceleration_backend", "auto"),
+        options=[
+            ft.dropdown.Option("auto", "Auto Detection"),
+            ft.dropdown.Option("cuda", "NVIDIA CUDA"),
+            ft.dropdown.Option("directml", "DirectML (AMD/Intel)"),
+            ft.dropdown.Option("cpu", "CPU Only (Safe)"),
+        ],
+        width=250
+    )
+    
     # Post-Processing & Export
     smoothing_input = ft.TextField(label="Smoothing Iterations", value=str(config_manager.get("post_processing.smoothing_iterations", 5)))
     decimation_input = ft.TextField(label="Target Triangles", value=str(config_manager.get("post_processing.decimation_target_triangles", 100000)))
@@ -918,6 +930,7 @@ def main(page: ft.Page):
             config_manager.set("reconstruction.enable_drift_correction", enable_drift_check.value)
             config_manager.set("reconstruction.refinement_method", refinement_method_dropdown.value)
             config_manager.set("reconstruction.enable_inpainting", enable_inpainting_check.value)
+            config_manager.set("reconstruction.acceleration_backend", acceleration_backend_dropdown.value)
             
             # Post-processing
             config_manager.set("post_processing.smoothing_iterations", int(smoothing_input.value))
@@ -956,6 +969,7 @@ def main(page: ft.Page):
             enable_drift_check,
             refinement_method_dropdown,
             enable_inpainting_check,
+            acceleration_backend_dropdown,
             ft.Divider(),
             ft.Text("Post-Processing & Export", weight="bold"),
             smoothing_input,
@@ -1015,6 +1029,7 @@ def main(page: ft.Page):
                     enable_drift_check,
                     refinement_method_dropdown,
                     enable_inpainting_check,
+                    acceleration_backend_dropdown,
                 ], col={"sm": 12, "md": 6}),
                 ft.Column([
                     ft.Text("Post-Processing & Export", size=18, weight="bold"),

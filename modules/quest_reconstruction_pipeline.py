@@ -434,7 +434,10 @@ class QuestReconstructionPipeline:
                     if self.config.get("reconstruction.enable_inpainting", False):
                         try:
                             if not hasattr(self, 'depth_inpainter'):
-                                self.depth_inpainter = DepthEstimator(model_type="MiDaS_small")
+                                self.depth_inpainter = DepthEstimator(
+                                    model_type="MiDaS_small",
+                                    backend=self.config.get("reconstruction.acceleration_backend", "auto")
+                                )
                             
                             depth_linear = self.depth_inpainter.hybrid_fill(depth_linear, rgb)
                             if i < 5: on_log(f"  AI Inpainting applied to frame {i}")

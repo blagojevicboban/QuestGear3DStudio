@@ -46,7 +46,7 @@ The application is divided into a UI layer and a logic layer (backend) that comm
         - Read Depth file -> `filter_depth` (if configured).
         - Frame is integrated into the `Volume`.
         - **Stereo Mode**: If enabled, both Left and Right camera frames are integrated. The system calculates the world pose for each camera using the Head Pose and known Extrinsics (IPD offset).
-5.    - **Finalization**: 
+5. **Finalization**: 
     - `extract_mesh()` generates a mesh.
     - **Inpainting**: (Optional) AI fills holes in depth maps using `hybrid_fill`.
     - **Poisson Reconstruction**: (Optional) Generates watertight mesh from point clouds.
@@ -57,8 +57,10 @@ The application is divided into a UI layer and a logic layer (backend) that comm
 ## 3. Configuration Management
 
 All parameters are stored in `config.yml`. `ConfigManager` enables:
-- Loading default values if the file does not exist.
-- Persistent storage of application preferences (e.g., `initial_directory`, `nerfstudio.method`, `nerfstudio.preset`, `nerfstudio.max_iterations`).
+- **Acceleration Engine**:
+    - **CUDA**: Native NVIDIA support for PyTorch and Open3D.
+    - **DirectML/ONNX**: Support for AMD/Intel GPUs on Windows via `onnxruntime-directml` for depth estimation.
+- Persistent storage of application preferences (e.g., `initial_directory`, `nerfstudio.method`).
 - Dynamic updating of values via the **Settings Tab** or Quick Settings dialog without restarting the application.
 
 ## 4. Error Handling
