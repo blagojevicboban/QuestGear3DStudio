@@ -1,5 +1,6 @@
 import yaml
 import os
+import copy
 
 DEFAULT_CONFIG = {
     "reconstruction": {
@@ -40,14 +41,14 @@ class ConfigManager:
     def load_config(self):
         if not os.path.exists(self.config_path):
             self.save_config(DEFAULT_CONFIG)
-            return DEFAULT_CONFIG
+            return copy.deepcopy(DEFAULT_CONFIG)
         
         try:
             with open(self.config_path, "r") as f:
-                return yaml.safe_load(f) or DEFAULT_CONFIG
+                return yaml.safe_load(f) or copy.deepcopy(DEFAULT_CONFIG)
         except Exception as e:
             print(f"Error loading config: {e}")
-            return DEFAULT_CONFIG
+            return copy.deepcopy(DEFAULT_CONFIG)
 
     def save_config(self, config=None):
         if config is None:
