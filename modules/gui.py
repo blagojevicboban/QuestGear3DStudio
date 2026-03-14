@@ -900,9 +900,6 @@ def main(page: ft.Page):
                 config_manager.set("nerfstudio.method", nerfstudio_ui.method_dropdown.value)
                 config_manager.set("nerfstudio.preset", nerfstudio_ui.preset_dropdown.value)
             
-            if page.dialog == settings_dialog:
-                page.close(settings_dialog)
-            
             show_msg("Settings saved")
         except ValueError:
             show_msg("Invalid numerical values")
