@@ -1062,7 +1062,7 @@ def main(page: ft.Page):
     branding_overlay = ft.Container(
         padding=ft.padding.only(right=25, top=2),
         content=ft.Row([
-            ft.Image(src="logo.png", width=64, height=64, border_radius=10),
+            ft.Image(src="logo.png", width=100, height=50, border_radius=10),
             ft.Text("QuestGear 3D Studio", size=32, weight="bold", color=ft.Colors.BLUE_400),
             ft.Text("v2.1", size=14, color=ft.Colors.GREY_700),
         ], spacing=15, vertical_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.END),

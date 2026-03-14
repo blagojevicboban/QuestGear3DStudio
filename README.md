@@ -1,8 +1,12 @@
 <p align="center">
-  <img src="assets/banner2.png" width="800" alt="QuestStream 3D Banner">
+  <img src="assets/banner3.jpg" width="800" alt="QuestGear 3D Banner">
 </p>
 
-# <p align="center">🥽 QuestGear 3D Studio</p>
+<p align="center">
+  <img src="assets/logo.png" width="128" alt="QuestGear Logo">
+</p>
+
+# <p align="center">QuestGear 3D Studio</p>
 
 <p align="center">
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+"></a>
