@@ -358,6 +358,7 @@ class NerfStudioUI:
             text="NerfStudio",
             icon=ft.Icons.AUTO_AWESOME,  # Star/sparkle icon for neural rendering
             content=ft.Container(
+                bgcolor="#151515",
                 content=ft.ListView([
                     ft.Container(
                         content=ft.Column([
@@ -398,7 +399,7 @@ class NerfStudioUI:
                     self.batch_container,
                     self.export_container,
                     self.history_container,
-                ], padding=10),
+                ], padding=10, expand=True),
                 expand=True
             )
         )

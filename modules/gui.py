@@ -137,6 +137,29 @@ def main(page: ft.Page):
     btn_visualize = ft.ElevatedButton("Open External Window", icon=ft.Icons.OPEN_IN_NEW, disabled=True)
     btn_stop_reconstruct = ft.ElevatedButton("Stop", icon=ft.Icons.STOP, visible=False, bgcolor=ft.Colors.RED_700, color=ft.Colors.WHITE)
     
+    def open_in_external_browser(e):
+        import webbrowser
+        # Getting the actual local path to viewer.html
+        path = os.path.abspath(os.path.join("assets", "viewer.html"))
+        # We use a file URL. The browser can load the GLB from the same relative dir or via absolute path
+        webbrowser.open(f"file:///{path}")
+
+    btn_open_browser = ft.TextButton(
+        "Open in Browser",
+        icon=ft.Icons.OPEN_IN_BROWSER,
+        visible=False,
+        on_click=open_in_external_browser,
+        tooltip="If internal viewer fails, open in Chrome/Edge"
+    )
+
+    btn_fix_webview = ft.TextButton(
+        "Fix Viewer",
+        icon=ft.Icons.HANDYMAN,
+        visible=False,
+        on_click=lambda _: webbrowser.open("https://developer.microsoft.com/en-us/microsoft-edge/webview2/"),
+        tooltip="Internal viewer requires 'Microsoft Edge WebView2'. Click to download."
+    )
+
     btn_toggle_view = ft.TextButton(
         "Switch to 3D View", 
         icon=ft.Icons.VIEW_IN_AR, 
@@ -144,6 +167,8 @@ def main(page: ft.Page):
         on_click=lambda _: (
             setattr(preview_img, "visible", not preview_img.visible),
             setattr(viewer_3d, "visible", not viewer_3d.visible),
+            setattr(btn_open_browser, "visible", viewer_3d.visible), 
+            setattr(btn_fix_webview, "visible", viewer_3d.visible), # Show fix link in 3D mode
             setattr(frame_range_slider, "visible", preview_img.visible),
             setattr(frame_range_label, "visible", preview_img.visible),
             setattr(btn_toggle_view, "text", "Switch to 2D Preview" if preview_img.visible == False else "Switch to 3D View"),
@@ -881,47 +906,6 @@ def main(page: ft.Page):
         except ValueError:
             show_msg("Invalid numerical values")
 
-    settings_dialog = ft.AlertDialog(
-        title=ft.Text("Quick Settings"),
-        content=ft.Column([
-            ft.Text("Reconstruction Parameters", weight="bold"),
-            voxel_input, 
-            depth_max_input, 
-            frame_int_input,
-            camera_dropdown,
-            filter_check,
-            enable_drift_check,
-            refinement_method_dropdown,
-            enable_inpainting_check,
-            acceleration_backend_dropdown,
-            ft.Divider(),
-            ft.Text("Post-Processing & Export", weight="bold"),
-            smoothing_input,
-            decimation_input,
-            enable_poisson_check,
-            ft.Text("Poisson Detail Level:"),
-            poisson_depth_slider,
-            export_fmt_dropdown,
-            enable_texturing_check,
-            texture_size_dropdown,
-            ft.Divider(),
-            ft.Text("Application", weight="bold"),
-            ft.Row([
-                initial_dir_input,
-                ft.IconButton(
-                    icon=ft.Icons.FOLDER_OPEN,
-                    on_click=lambda _: settings_folder_picker.get_directory_path(
-                        initial_directory=initial_dir_input.value if os.path.exists(initial_dir_input.value) else None
-                    )
-                )
-            ])
-        ], tight=True, scroll=ft.ScrollMode.AUTO),
-        actions=[
-            ft.TextButton("Cancel", on_click=lambda _: page.close(settings_dialog)),
-            ft.TextButton("Save", on_click=save_settings),
-        ],
-    )
-
     # ==== NerfStudio Integration ====
     from .nerfstudio_gui import NerfStudioUI
     from .help_gui import HelpUI
@@ -995,17 +979,8 @@ def main(page: ft.Page):
         ], scroll=ft.ScrollMode.AUTO)
     )
 
-    def open_settings(e):
-        page.open(settings_dialog)
-
     # Layout - Now with Tabs
-    page.appbar = ft.AppBar(
-        title=ft.Text("QuestGear 3D Studio"),
-        bgcolor=ft.Colors.BLUE_800,
-        actions=[
-            ft.IconButton(icon=ft.Icons.SETTINGS, on_click=open_settings),
-        ]
-    )
+    # page.appbar removed as requested - all settings are in the Settings tab
 
     # TSDF Reconstruction Tab (existing functionality)
     tsdf_tab_content = ft.Container(
@@ -1024,7 +999,9 @@ def main(page: ft.Page):
                     ft.Row([
                         ft.Text("Visualizer & Frames:", weight="bold"),
                         ft.VerticalDivider(),
-                        btn_toggle_view
+                        btn_toggle_view,
+                        btn_open_browser,
+                        btn_fix_webview
                     ]),
                     ft.Stack([
                         preview_img,
@@ -1069,18 +1046,32 @@ def main(page: ft.Page):
                 icon=ft.Icons.VIEW_IN_AR,
                 content=tsdf_tab_content
             ),
+            nerfstudio_ui.get_tab(),
             ft.Tab(
                 text="Settings",
                 icon=ft.Icons.SETTINGS,
                 content=settings_tab_content
             ),
-            nerfstudio_ui.get_tab(),
             help_ui.get_tab(),
         ],
         expand=True
     )
 
-    main_layout = ft.Column([tabs], expand=True)
+    # Header with Logo
+    app_header = ft.Container(
+        padding=ft.padding.only(left=20, top=10, bottom=5, right=20),
+        bgcolor="#111111",
+        content=ft.Row([
+            ft.Image(src="logo.png", width=32, height=32, border_radius=5),
+            ft.Text("QuestGear 3D Studio", size=20, weight="bold", color=ft.Colors.BLUE_400),
+            ft.VerticalDivider(width=10),
+            ft.Text("Spatial Reconstruction Suite", size=12, color=ft.Colors.GREY_500),
+            ft.Container(expand=True), # Spacer
+            ft.Text("v2.1.0-alpha", size=10, color=ft.Colors.GREY_700),
+        ], vertical_alignment=ft.CrossAxisAlignment.CENTER)
+    )
+
+    main_layout = ft.Column([app_header, tabs], expand=True, spacing=0)
 
     page.add(main_layout)
     
@@ -1097,4 +1088,4 @@ def main(page: ft.Page):
     nerfstudio_ui.start_installation_check()
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    ft.app(target=main, assets_dir="assets")

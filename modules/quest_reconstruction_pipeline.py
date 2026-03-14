@@ -527,7 +527,7 @@ class QuestReconstructionPipeline:
                     })
                 
                 processor = TextureProcessor(texture_size=export_config.get("texture_size", 2048))
-                mesh, texture_img = processor.process_mesh(mesh, baker_frames, self.project_dir, on_log=on_log)
+                mesh, texture_img = processor.process_mesh(mesh, baker_frames, self.project_dirs[0], on_log=on_log)
                 
             except Exception as e:
                 if on_log: on_log(f"⚠ Texture baking failed: {e}. Falling back to vertex colors.")
