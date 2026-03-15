@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 from typing import Callable, Optional
 from .nerfstudio_trainer import NerfStudioTrainer
+from .neural_enhancer import NeuralEnhancer
 
 
 class NerfStudioUI:
@@ -328,6 +329,39 @@ class NerfStudioUI:
             visible=False 
         )
 
+        # ====== Neural Enhancement (DiFix3D+) ======
+        self.btn_enhance = ft.ElevatedButton(
+            "Enhance Result (DiFix3D+)",
+            icon=ft.Icons.AUTO_FIX_HIGH,
+            on_click=self._on_enhance_click,
+            color=ft.Colors.AMBER_400,
+            tooltip="Apply single-step diffusion to remove artifacts and improve quality"
+        )
+        self.enhance_progress = ft.ProgressBar(visible=False)
+        self.enhance_status = ft.Text("", size=12)
+        
+        self.enhancer_container = ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Text("Neural Enhancer", weight="bold", size=16),
+                    ft.Icon(ft.Icons.NEW_RELEASES, color=ft.Colors.AMBER, size=16),
+                    ft.Text("BETA", size=10, color=ft.Colors.AMBER, weight="bold")
+                ]),
+                ft.Text(
+                    "Remove floaters and artifacts using NVIDIA's DiFix3D+ (Single-Step Diffusion).",
+                    size=11, color=ft.Colors.GREY_400
+                ),
+                self.btn_enhance,
+                self.enhance_progress,
+                self.enhance_status
+            ]),
+            padding=15,
+            bgcolor="#2a2a2a",
+            border_radius=10,
+            margin=10,
+            visible=False # Shown when a result is available
+        )
+
         # ====== History ======
         self.history_list = ft.ListView(height=150, spacing=2, auto_scroll=False)
         self.btn_refresh_history = ft.ElevatedButton("Refresh History", icon=ft.Icons.REFRESH, on_click=self._refresh_history)
@@ -397,6 +431,7 @@ class NerfStudioUI:
                         margin=10
                     ),
                     self.batch_container,
+                    self.enhancer_container,
                     self.export_container,
                     self.history_container,
                 ], padding=10, expand=True),
@@ -678,7 +713,7 @@ class NerfStudioUI:
     
     def _update_install_log(self, text: str):
         """Append text to install log."""
-        self.install_log.controls.append(ft.Text(text, size=11, font_family="Consolas"))
+        self.install_log.controls.append(ft.Text(text, size=11, font_family="Consolas", selectable=True))
         if len(self.install_log.controls) > 1000:
             self.install_log.controls.pop(0)
 
@@ -796,7 +831,7 @@ class NerfStudioUI:
             new_controls = []
             for line in lines:
                 new_controls.append(
-                    ft.Text(line.rstrip(), size=10, font_family="Consolas", color=ft.Colors.GREEN_400)
+                    ft.Text(line.rstrip(), size=10, font_family="Consolas", color=ft.Colors.GREEN_400, selectable=True)
                 )
             
             self.training_log.controls.extend(new_controls)
@@ -866,6 +901,7 @@ class NerfStudioUI:
             self.output_path_text.value = f"{output_path}" # Modified to just path for cleaner usage
             self.btn_open_viewer.visible = True
             self.export_container.visible = True # Show export
+            self.enhancer_container.visible = True # Show enhancer
             self._show_message("Training completed successfully!")
             
             if self.is_batch_processing:
@@ -903,6 +939,72 @@ class NerfStudioUI:
         
         self._show_message(f"Opening viewer at {viewer_url}")
     
+
+    def _on_enhance_click(self, e):
+        """Enhance the training results using DiFix3D+."""
+        output_path = self.output_path_text.value
+        if not output_path or not os.path.exists(output_path):
+            self._show_message("No valid output path found. Please train a model first.")
+            return
+
+        self.btn_enhance.disabled = True
+        self.enhance_progress.visible = True
+        self.enhance_status.value = "Initializing DiFix3D+ (may take a moment to load weights)..."
+        self.page.update()
+
+        def run_enhancement():
+            try:
+                # 1. Initialize enhancer
+                enhancer = NeuralEnhancer()
+                if not enhancer.load_model():
+                    self.enhance_status.value = "❌ Error: Could not load DiFix3D+. Check your CUDA/venv."
+                    return
+
+                # 2. Find any rendered screenshots or images in the output folder
+                # If none found, we suggest the user to render a viewpoint first
+                image_extensions = [".png", ".jpg", ".jpeg"]
+                found_images = []
+                for root, dirs, files in os.walk(output_path):
+                    for file in files:
+                        if any(file.lower().endswith(ext) for ext in image_extensions):
+                            # Avoid already enhanced images
+                            if "_enhanced" not in file:
+                                found_images.append(os.path.join(root, file))
+
+                if not found_images:
+                    self.enhance_status.value = "ℹ️ No renders found. Open 'Viewer' and take a screenshot first!"
+                    return
+
+                self.enhance_status.value = f"✨ Enhancing {len(found_images)} renders..."
+                self.page.update()
+
+                count = 0
+                for img_path in found_images:
+                    self.enhance_status.value = f"✨ Processing: {os.path.basename(img_path)}..."
+                    self.page.update()
+
+                    # Load and enhance
+                    from PIL import Image
+                    img = Image.open(img_path)
+                    enhanced_img = enhancer.enhance_image(img)
+
+                    if enhanced_img:
+                        # Save next to original
+                        base, ext = os.path.splitext(img_path)
+                        save_path = f"{base}_enhanced{ext}"
+                        enhanced_img.save(save_path)
+                        count += 1
+
+                self.enhance_status.value = f"✅ Done! Enhanced {count} images in output folder."
+            except Exception as ex:
+                self.enhance_status.value = f"❌ Enhancement failed: {str(ex)}"
+            finally:
+                self.btn_enhance.disabled = False
+                self.enhance_progress.visible = False
+                self.page.update()
+
+        threading.Thread(target=run_enhancement, daemon=True).start()
+
     def _show_message(self, text: str):
         """Show snackbar message."""
         self.page.snack_bar = ft.SnackBar(content=ft.Text(text))
@@ -1167,9 +1269,10 @@ class NerfStudioUI:
         """Prepare export for historical model."""
         self.output_path_text.value = path
         self.export_container.visible = True
+        self.enhancer_container.visible = True
         self.export_status.value = f"Selected: {os.path.basename(path)}"
         self.page.update()
-        self._show_message("Ready to export. Select format and click Export.")
+        self._show_message("Ready to export or enhance. Select an option above.")
 
     def _launch_viewer_process(self, path):
         """Launch ns-viewer in background."""

@@ -67,11 +67,19 @@
 │  │  │  • Open3D visualization                                  │   │    │
 │  │  │  • Export to OBJ, PLY, GLB                              │   │    │
 │  │  └─────────────────────────────────────────────────────────┘   │    │
+│  │                           │                                      │    │
+│  │                           ▼                                      │    │
+│  │  ┌─────────────────────────────────────────────────────────┐   │    │
+│  │  │  Neural Enhancement (DiFix3D+) [NEW v2.4]                │   │    │
+│  │  │  • Post-processing of renders                            │   │    │
+│  │  │  • Single-step Diffusion refinement                      │   │    │
+│  │  │  • Output: _enhanced images                              │   │    │
+│  │  └─────────────────────────────────────────────────────────┘   │    │
 │  └────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Data Flow (Updated Phase 2)
+## Data Flow (Updated Phase 3 - v2.4.0)
 
 ### 📸 Capture (Quest 3)
 - **Object Mode**: Continuous RGB-D stream.
@@ -83,6 +91,15 @@ When hardware depth is unavailable or poor quality:
 1. User clicks **"Generate Monocular Depth"** in Studio GUI.
 2. `monocular_depth.py` runs **MiDaS** inference on color frames.
 3. 16-bit depth PNGs are saved to `depth_monocular/`.
+
+### 🚀 Neural Enhancement Path (DiFix3D+)
+New in v2.4.0, provides professional refinement for NeRF/3DGS outputs:
+1. **Source**: Renders or screenshots from a trained NerfStudio model.
+2. **Processing**: `neural_enhancer.py` uses the **DiFix3D+** pipeline.
+3. **Architecture**: 
+   - Uses a custom **AutoencoderKL** with encoder-to-decoder skip connections.
+   - Refines images in a single diffusion step to remove "cloudy" artifacts and floater noise.
+4. **Output**: High-fidelity images saved alongside originals for comparison or final presentation.
 ### 🏘️ Multi-Scan Merging Architecture
 Introduced in v2.3.0 to support scanning large environments (e.g., entire apartments) room-by-room:
 1. **Selection**: User selects multiple ZIP captures or extracted folders.

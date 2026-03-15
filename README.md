@@ -55,6 +55,7 @@
 - 🗿 **Poisson Reconstruction**: [NEW] Generate **water-tight (solid)** 3D meshes, perfect for 3D printing and clean topology.
 - 🚀 **Multi-Backend Acceleration**: [NEW] Support for **NVIDIA CUDA** and **AMD/Intel DirectML (ONNX)** for high-speed AI processing.
 - 🏘️ **Multi-Scan Merging**: [NEW] Stitch multiple ZIP recordings into a single large-scale scene (room-by-room scanning).
+- ✨ **Neural Enhancement (DiFix3D+)**: [NEW v2.4] Professional post-processing using **NVIDIA DiFix3D+**. Remove artifacts, fix "ghosting", and achieve 3D consistency in your NeRF/3DGS renders with a single diffusion step.
 
 ---
 
@@ -66,6 +67,7 @@
 | **Frontend** | Flet (Flutter-based) |
 | **3D Engine** | Open3D |
 | **Neural Rendering** | NerfStudio (Gaussian Splatting, NeRF) |
+| **Image Enhancement** | NVIDIA DiFix3D+ (Stable Diffusion) |
 | **Computer Vision** | OpenCV & NumPy |
 | **Data Format** | JSON / CSV / YAML |
 
@@ -76,6 +78,7 @@
 ### 📝 Prerequisites
 - **OS**: Windows 10/11
 - **Python**: 3.11 (Recommended)
+- **GPU**: NVIDIA (Recommended for DiFix3D+) or high-end CPU
 - **Data**: Quest Capture data (ZIP or extracted folder)
 
 ### 💻 Installation
@@ -109,13 +112,15 @@ QuestStream/
 ├── modules/
 │   ├── gui.py         # Flet UI and thread management
 │   ├── reconstruction.py# TSDF Engine (Open3D)
+│   ├── nerfstudio_gui.py # Professional NeRF/3DGS GUI
+│   ├── neural_enhancer.py # DiFix3D+ Enhancement Engine
+│   ├── difix/          # Local DiFix pipeline & VAE classes
 │   ├── quest_adapter.py # Quest data adaptation
 │   ├── quest_image_processor.py # YUV/Depth processing
-│   ├── quest_reconstruction_utils.py # Poses/Depth Utils
 │   ├── texture_processor.py # UV Unwrapping & Baking
 │   ├── pose_refinement.py   # SLAM & Drift Correction
 │   ├── monocular_depth.py   # AI Inpainting & ONNX Engine
-│   └── config_manager.py# YAML Config loader
+│   └── config_manager.py # YAML Config loader
 └── README_QUEST.md    # Detailed instructions for Quest 3 pipeline
 ```
 

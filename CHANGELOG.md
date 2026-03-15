@@ -1,4 +1,21 @@
 # QuestGear3DStudio - Changelog
+## [2.4.0] - 2026-03-15: The Neural Enhancement Update 🚀✨
+### 🎯 Summary
+Introduced state-of-the-art Neural Enhancement using **NVIDIA DiFix3D+**, providing a professional post-processing pipeline for NeRF and Gaussian Splatting results. This update allows users to refine their 3D reconstructions by removing artifacts and ensuring high visual fidelity through single-step diffusion.
+
+### ✨ New Features
+*   **🧠 DiFix3D+ Integration**:
+    *   Integrated the **DiFix3D+** single-step diffusion model for artifacts removal and 3D consistency.
+    *   Custom VAE implementation with **skip-connections** to maintain high-frequency details from the original renders.
+    *   Support for local execution with automated weights management via Hugging Face (`nvidia/difix`).
+*   **🎛️ Neural Enhancer GUI**:
+    *   New dedicated section in the NerfStudio tab for managing post-processing.
+    *   Batch enhancement of training renders/screenshots with real-time progress monitoring.
+    *   Automatic suffixing (`_enhanced`) for easy comparison with original results.
+*   **🛠️ Robust Local Loading**:
+    *   Bypassed `trust_remote_code` limitations by implementing local pipeline and VAE loaders in `modules/difix/`.
+    *   Fallback logic for CPU/CUDA detection ensures compatibility across varying hardware setups.
+
 ## [2.3.1] - 2026-03-14: Stability & GUI Refactoring Pass 🛠️
 ### 🎯 Summary
 Critical maintenance update focused on resolving initialization race conditions and GUI binding errors introduced by the Multi-Scan architecture. Reorganized the entire `gui.py` module for predictable startup and reliable event handling.
