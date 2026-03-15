@@ -160,9 +160,19 @@ def find_and_inject_msvc():
     return found_any
 
 if __name__ == "__main__":
-    # Inject MSVC if needed before importing nerfstudio (which might trigger checks)
+    # 1. Inject MSVC if needed before importing nerfstudio
     find_and_inject_msvc()
     
+    # 2. Fix for "Unsupported gpu architecture" on older cards (like Quadro P600 / Pascal)
+    # This environment variable tells gsplat/torch exactly which architectures to compile for.
+    # 6.1 = Pascal (P600, GTX 10-series), 7.5 = Turing (RTX 20, T-series), 
+    # 8.0/8.6 = Ampere (RTX 30, A-series), 8.9 = Ada (RTX 40)
+    if "TORCH_CUDA_ARCH_LIST" not in os.environ:
+        # We set a broad but compatible list. 
+        # Note: If compilation still fails, it might be due to CUDA version vs Arch mismatch.
+        os.environ["TORCH_CUDA_ARCH_LIST"] = "6.1;7.0;7.5;8.0;8.6;8.9"
+        print(f"[Launcher] Setting TORCH_CUDA_ARCH_LIST for better compatibility.")
+
     try:
         print(f"[Launcher] Starting NerfStudio training with arguments: {sys.argv[1:]}")
         from nerfstudio.scripts.train import entrypoint
@@ -173,24 +183,32 @@ if __name__ == "__main__":
         sys.exit(1)
     except (Exception, SystemExit) as e:
         error_msg = str(e)
-        # Handle cases where e is just an exit code integer (like from SystemExit)
         if error_msg == "1" or not error_msg:
             error_msg = "NerfStudio encountered an internal error"
             
         print(f"[Launcher] ERROR: {error_msg}")
         
-        # Specific check for gsplat compilation issues on Windows
+        # Specific check for gsplat/CUDA issues on Windows
         msg_lower = error_msg.lower()
-        if "gsplat" in msg_lower or "cl.exe" in msg_lower or "where', 'cl" in msg_lower or "csrc" in msg_lower:
+        is_gsplat_error = any(x in msg_lower for x in ["gsplat", "cl.exe", "where', 'cl", "csrc", "nvcc", "compute_"])
+        
+        if is_gsplat_error:
             print("\n" + "="*60)
-            print("💎 GAUSSIAN SPLATTING (gsplat) ERROR DETECTED")
+            print("💎 GAUSSIAN SPLATTING (gsplat) COMPILATION ERROR")
             print("="*60)
-            print("The 'splatfacto' method requires C++ compilation but your system is missing")
-            print("the Visual Studio C++ Compiler (cl.exe).")
+            
+            if "compute_61" in msg_lower or "unsupported gpu architecture" in msg_lower:
+                print("Your GPU (Pascal/Quadro P600) is hitting a compatibility limit with")
+                print("the current Gaussian Splatting (gsplat) version and CUDA toolkit.")
+            elif "cl.exe" in msg_lower or "where" in msg_lower:
+                 print("The 'splatfacto' method requires C++ compilation but your system")
+                 print("is missing or cannot find the Visual Studio C++ Compiler (cl.exe).")
+            else:
+                print("A general compilation error occurred while building CUDA kernels.")
+            
             print("\nTO FIX THIS:")
-            print("1. Install 'Visual Studio Build Tools' with 'C++ Desktop Development'.")
-            print("2. OR: Switch 'Training Method' to 'nerfacto' in Settings.")
-            print("   (Nerfacto is slower but doesn't require a C++ compiler).")
+            print("1. SWITCH TO 'nerfacto' in Settings (Works on ALL GPUs, no compilation needed).")
+            print("2. IF YOU NEED SPLATTING: You may need to downgrade CUDA or gsplat.")
             print("="*60 + "\n")
         elif not isinstance(e, SystemExit):
             import traceback

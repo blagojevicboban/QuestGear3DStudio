@@ -11,8 +11,8 @@ ingestion:
   validation_checksum: true
 nerfstudio:
   max_iterations: 15000
-  method: splatfacto
-  preset: Balanced
+  method: depth-nerfacto
+  preset: Fast
 post_processing:
   decimation_target_triangles: 100000
   enable_poisson: false

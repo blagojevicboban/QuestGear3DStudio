@@ -480,6 +480,11 @@ def main(page: ft.Page):
     def on_file_result(e: ft.FilePickerResultEvent):
         nonlocal pending_zip_paths, temp_dirs, frames_data
         if e.files:
+            # Update initial directory to where the user just was
+            parent_dir = os.path.dirname(e.files[0].path)
+            initial_dir_input.value = parent_dir
+            initial_dir_input.update()
+            
             temp_dirs = [] 
             frames_data = []
             pending_zip_paths = [f.path for f in e.files]
@@ -489,6 +494,10 @@ def main(page: ft.Page):
 
     def on_folder_result(e: ft.FilePickerResultEvent):
         if e.path:
+            # Update initial directory to where the user just was
+            initial_dir_input.value = e.path
+            initial_dir_input.update()
+            
             path = e.path
             if path not in temp_dirs:
                 temp_dirs.append(path)
@@ -595,16 +604,23 @@ def main(page: ft.Page):
 
     page.overlay.extend([file_picker, folder_picker, settings_folder_picker, msvc_folder_picker, reconstruct_format_dialog])
 
+    # Helper to get the normalized initial directory
+    def get_initial_dir():
+        path = (initial_dir_input.value or "").strip()
+        if path and os.path.exists(path):
+            return os.path.normpath(path)
+        return None
+
     # Assign Handlers to buttons defined at top
     btn_load_zip.on_click = lambda _: file_picker.pick_files(
         dialog_title="Open Quest Capture ZIP(s)",
         allowed_extensions=["zip"],
         allow_multiple=True,
-        initial_directory=config_manager.get("app_settings.initial_directory") if os.path.exists(config_manager.get("app_settings.initial_directory", "")) else None
+        initial_directory=get_initial_dir()
     )
     btn_load_folder.on_click = lambda _: folder_picker.get_directory_path(
         dialog_title="Open Extracted Quest Data Folder(s)",
-        initial_directory=config_manager.get("app_settings.initial_directory") if os.path.exists(config_manager.get("app_settings.initial_directory", "")) else None
+        initial_directory=get_initial_dir()
     )
     btn_stop_zip.on_click = stop_zip_extraction
     btn_process.on_click = lambda e: page.open(reconstruct_format_dialog)
